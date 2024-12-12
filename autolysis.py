@@ -3,22 +3,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import requests  # Using requests for custom API call to the proxy
+import openai
 import sys
 from pathlib import Path
 import json
 
 # Set your custom proxy URL for the OpenAI API
-openai_api_base = "https://aiproxy.sanand.workers.dev/openai/"
+openai.api_base = "https://aiproxy.sanand.workers.dev/openai/"
 
 # Load your AIPROXY_TOKEN environment variable (or set it directly)
-AIPROXY_TOKEN = os.environ.get("AIPROXY_TOKEN")
-
-# Define headers for the API requests
-headers = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {AIPROXY_TOKEN}"
-}
+openai.api_key = os.environ.get("AIPROXY_TOKEN")
 
 def generate_story(data_summary, analysis_results, charts):
     # Converting pandas data types to standard Python types to avoid issues with json serialization
@@ -53,26 +47,13 @@ def generate_story(data_summary, analysis_results, charts):
     Charts: {charts}
     """
     
-    data = {
-        "model": "gpt-4o-mini",  # Example model (adjust as necessary)
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    
-    # Ensure the URL path is correctly concatenated
-    api_url = f"{openai_api_base}v1/chat/completions"
-    
-    # Make the API request
-    response = requests.post(
-        api_url,  # Using the corrected URL
-        headers=headers,
-        data=json.dumps(data)
+    response = openai.Completion.create(
+        model="gpt-4o-mini",  # Adjust model as necessary
+        prompt=prompt,
+        max_tokens=500,
     )
     
-    if response.status_code == 200:
-        return response.json()['choices'][0]['message']['content']
-    else:
-        raise Exception(f"Error generating story: {response.text}")
-
+    return response.choices[0].text.strip()
 
 def perform_generic_analysis(dataframe):
     # Summarize dataset: column names, types, missing values, summary statistics
@@ -100,43 +81,43 @@ def perform_generic_analysis(dataframe):
 
     return summary, correlation_matrix, outliers
 
-def create_histograms(dataframe, numerical_cols):
+def create_histograms(dataframe, numerical_cols, output_folder):
     # Save histograms as PNG
     charts = []
     for col in numerical_cols:
         plt.figure(figsize=(8, 6))
         sns.histplot(dataframe[col], kde=True, bins=30)
         plt.title(f'Distribution of {col}')
-        chart_path = f"{col}_histogram.png"
+        chart_path = os.path.join(output_folder, f"{col}_histogram.png")
         plt.savefig(chart_path, dpi=100)
         plt.close()
         charts.append(chart_path)
     return charts
 
-def create_boxplots(dataframe, numerical_cols):
+def create_boxplots(dataframe, numerical_cols, output_folder):
     # Boxplot for outlier detection
     plt.figure(figsize=(8, 6))
     sns.boxplot(data=dataframe[numerical_cols])
     plt.title('Outlier Detection - Boxplot')
-    boxplot_path = 'outliers_boxplot.png'
+    boxplot_path = os.path.join(output_folder, 'outliers_boxplot.png')
     plt.savefig(boxplot_path, dpi=100)
     plt.close()
     return boxplot_path
 
-def create_correlation_heatmap(correlation_matrix):
+def create_correlation_heatmap(correlation_matrix, output_folder):
     # Correlation heatmap
     if correlation_matrix is not None:
         plt.figure(figsize=(10, 8))
         sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
         plt.title('Correlation Matrix')
-        heatmap_path = 'correlation_matrix.png'
+        heatmap_path = os.path.join(output_folder, 'correlation_matrix.png')
         plt.savefig(heatmap_path, dpi=100)
         plt.close()
         return heatmap_path
     return None
 
-def create_readme(ai_story, charts, summary):
-    with open('README.md', 'w') as readme_file:
+def create_readme(ai_story, charts, summary, output_folder):
+    with open(os.path.join(output_folder, 'README.md'), 'w', encoding='utf-16') as readme_file:
         readme_file.write("# Automated Data Analysis Report\n\n")
         readme_file.write("## Dataset Summary\n")
         readme_file.write(f"Columns: {summary['columns']}\n")
@@ -153,8 +134,15 @@ def create_readme(ai_story, charts, summary):
             readme_file.write(f"![{chart}]({chart})\n")
 
 def analyze_csv(input_file):
-    # Load dataset
-    dataframe = pd.read_csv(input_file, encoding = 'latin1')
+    # Dynamically create the output folder based on the CSV filename
+    input_file_name = Path(input_file).stem  # Get the base name of the input file without the extension
+    output_folder = os.path.join(os.getcwd(), input_file_name)
+    
+    # Create the folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+
+    # Load dataset with UTF-16 encoding
+    dataframe = pd.read_csv(input_file, encoding='utf-16')
 
     # Step 1: Perform generic analysis
     summary, correlation_matrix, outliers = perform_generic_analysis(dataframe)
@@ -167,18 +155,18 @@ def analyze_csv(input_file):
     charts = []
 
     # Create histograms for numerical columns
-    charts.extend(create_histograms(dataframe, numerical_cols))
+    charts.extend(create_histograms(dataframe, numerical_cols, output_folder))
 
     # Create boxplot for outliers
-    charts.append(create_boxplots(dataframe, numerical_cols))
+    charts.append(create_boxplots(dataframe, numerical_cols, output_folder))
 
     # Create correlation heatmap
     if correlation_matrix is not None:
-        charts.append(create_correlation_heatmap(correlation_matrix))
+        charts.append(create_correlation_heatmap(correlation_matrix, output_folder))
 
     # Step 4: Create README file with analysis summary, AI insights, and charts
-    create_readme(ai_story, charts, summary)
-    print("Analysis complete. Check README.md and chart files.")
+    create_readme(ai_story, charts, summary, output_folder)
+    print(f"Analysis complete. Check {output_folder}/README.md, chart files.")
 
 if __name__ == "__main__":
     # Ensure CSV filename is passed as an argument
