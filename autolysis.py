@@ -3,16 +3,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import openai
+import requests
 import sys
 from pathlib import Path
 import json
 
 # Set your custom proxy URL for the OpenAI API
-openai.api_base = "https://aiproxy.sanand.workers.dev/openai/"
+openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"  # Adjust the URL if needed
 
 # Load your AIPROXY_TOKEN environment variable (or set it directly)
-openai.api_key = os.environ.get("AIPROXY_TOKEN")
+openai_api_key = os.environ.get("AIPROXY_TOKEN")
 
 def generate_story(data_summary, analysis_results, charts):
     # Converting pandas data types to standard Python types to avoid issues with json serialization
@@ -47,13 +47,30 @@ def generate_story(data_summary, analysis_results, charts):
     Charts: {charts}
     """
     
-    response = openai.Completion.create(
-        model="gpt-4o-mini",  # Adjust model as necessary
-        prompt=prompt,
-        max_tokens=500,
-    )
+    # Prepare the data for the request
+    headers = {
+        "Authorization": f"Bearer {openai_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": "gpt-4o-mini",  # Or another model like "gpt-3.5-turbo"
+        "messages": [
+            {"role": "system", "content": "You are a data analysis assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 500
+    }
+
+    # Send the POST request to the OpenAI API (or proxy)
+    response = requests.post(openai_api_url, headers=headers, json=data)
     
-    return response.choices[0].text.strip()
+    if response.status_code == 200:
+        return response.json()['choices'][0]['message']['content'].strip()
+    else:
+        print(f"Error: {response.status_code}")
+        print(response.text)
+        return "AI generation failed."
 
 def perform_generic_analysis(dataframe):
     # Summarize dataset: column names, types, missing values, summary statistics
@@ -142,7 +159,7 @@ def analyze_csv(input_file):
     os.makedirs(output_folder, exist_ok=True)
 
     # Load dataset with UTF-16 encoding
-    dataframe = pd.read_csv(input_file, encoding='utf-16')
+    dataframe = pd.read_csv(input_file, encoding='latin1')
 
     # Step 1: Perform generic analysis
     summary, correlation_matrix, outliers = perform_generic_analysis(dataframe)
