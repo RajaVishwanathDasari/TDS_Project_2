@@ -1,147 +1,97 @@
 import os
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import openai
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from airproxy import AirProxy
+from datetime import datetime
+import json
 
-# Set up the OpenAI API key from environment variable
-openai.api_key = os.getenv("AIPROXY_TOKEN")
+# Initialize the airproxy connection
+airproxy = AirProxy(api_key="your_airproxy_api_key")
 
-def analyze_data(df):
-    """
-    Perform basic analysis on the dataset: Summary statistics, missing values, correlations, and outliers.
-    Returns a dictionary of analysis results.
-    """
-    analysis = {}
+def load_data(file_path):
+    """Load and clean data from a CSV file."""
+    try:
+        data = pd.read_csv(file_path)
+        data = data.dropna()  # Basic data cleaning
+        print("Data loaded successfully")
+        return data
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        return None
 
-    # Summary statistics
-    analysis['summary'] = df.describe(include='all')
+def analyze_with_llm(data):
+    """Send data analysis request to the LLM via airproxy."""
+    prompt = f"Analyze the following dataset and provide insights:\n\n{data.head().to_json(orient='records')}"
+    response = airproxy.send_prompt(prompt)
+    
+    if response and "text" in response:
+        return response["text"]
+    else:
+        return "Analysis not available."
 
-    # Missing values
-    analysis['missing_values'] = df.isnull().sum()
-
-    # Correlation matrix
-    analysis['correlation_matrix'] = df.corr()
-
-    # Check for outliers using IQR
-    Q1 = df.quantile(0.25)
-    Q3 = df.quantile(0.75)
-    IQR = Q3 - Q1
-    outliers = ((df < (Q1 - 1.5 * IQR)) | (df > (Q3 + 1.5 * IQR))).sum()
-    analysis['outliers'] = outliers
-
-    return analysis
-
-def generate_visualizations(df, analysis):
-    """
-    Generate visualizations from the analysis: Correlation heatmap and histogram of numerical columns.
-    """
-    # Create a correlation heatmap
+def visualize_data(data):
+    """Generate and save visualizations."""
     plt.figure(figsize=(10, 8))
-    sns.heatmap(analysis['correlation_matrix'], annot=True, cmap='coolwarm', fmt='.2f')
-    plt.title('Correlation Matrix')
-    plt.savefig('correlation_matrix.png', format='png')
-    plt.close()
 
-    # Create histograms for numerical columns
-    numerical_cols = df.select_dtypes(include=[np.number]).columns
-    for col in numerical_cols:
-        plt.figure(figsize=(8, 6))
-        sns.histplot(df[col], kde=True, bins=30)
-        plt.title(f'{col} Distribution')
-        plt.xlabel(col)
-        plt.ylabel('Frequency')
-        plt.savefig(f'{col}_distribution.png', format='png')
-        plt.close()
+    # Generate a correlation heatmap
+    corr_matrix = data.corr()
+    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+    plt.title("Correlation Matrix")
+    plt.savefig("correlation_matrix.png")
+    print("Correlation matrix saved.")
 
-def create_markdown_report(analysis, filename):
-    """
-    Create a README.md report with the analysis results, visualizations, and insights.
-    """
-    with open('README.md', 'w') as f:
-        # Add title and description of the analysis
-        f.write(f"# Automated Analysis of {filename}\n\n")
-        f.write(f"## Summary Statistics\n")
-        f.write(f"{analysis['summary']}\n\n")
+    # Generate a histogram of the first column (for demonstration)
+    data.iloc[:, 0].hist(bins=20, alpha=0.75)
+    plt.title(f"Histogram of {data.columns[0]}")
+    plt.xlabel(data.columns[0])
+    plt.ylabel("Frequency")
+    plt.savefig("histogram.png")
+    print("Histogram saved.")
 
-        # Add missing values
-        f.write(f"## Missing Values\n")
-        f.write(f"{analysis['missing_values']}\n\n")
+def generate_narrative(data, analysis_results):
+    """Generate a markdown narrative for the analysis."""
+    narrative = "# Data Analysis Report\n\n"
+    narrative += "## Descriptive Statistics\n"
+    narrative += data.describe().to_markdown() + "\n"
+    
+    narrative += "## LLM Insights\n"
+    narrative += analysis_results + "\n"
 
-        # Add outlier summary
-        f.write(f"## Outliers\n")
-        f.write(f"{analysis['outliers']}\n\n")
+    # Adding some basic visualizations as images
+    narrative += "## Visualizations\n"
+    narrative += "### Correlation Matrix\n![Correlation Matrix](correlation_matrix.png)\n"
+    narrative += "### Histogram\n![Histogram](histogram.png)\n"
 
-        # Add visualizations
-        f.write(f"## Visualizations\n")
-        f.write(f"![Correlation Matrix](correlation_matrix.png)\n")
-        for col in analysis['summary'].columns:
-            if col in analysis['outliers'].index:
-                f.write(f"![{col} Distribution]({col}_distribution.png)\n")
+    return narrative
 
-def get_llm_summary(df, analysis):
-    """
-    Use OpenAI API to generate a narrative summary of the analysis results.
-    """
-    # Prepare the prompt for the LLM
-    prompt = f"""
-    The dataset contains the following columns: {', '.join(df.columns)}
-    The summary statistics are as follows:
-    {analysis['summary']}
+def save_results(narrative):
+    """Save the narrative and visualizations to disk."""
+    with open("analysis_report.md", "w") as f:
+        f.write(narrative)
+    print("Analysis report saved as 'analysis_report.md'.")
 
-    There are missing values in the following columns:
-    {analysis['missing_values']}
-
-    The correlation matrix is:
-    {analysis['correlation_matrix']}
-
-    The outliers detected in the dataset are:
-    {analysis['outliers']}
-
-    Please summarize the key insights from this analysis and suggest potential actions or conclusions.
-    """
-
-    # Request the LLM to generate the summary
-    response = openai.Completion.create(
-        model="gpt-4o-mini",  # Use the correct model for this task
-        prompt=prompt,
-        max_tokens=500
-    )
-
-    return response.choices[0].text.strip()
-
-def main(filename):
-    """
-    Main function to load the dataset, perform analysis, generate visualizations,
-    create a Markdown report, and ask LLM to write a story about the data.
-    """
-    # Load the dataset
-    df = pd.read_csv(filename)
-
-    # Analyze the data
-    analysis = analyze_data(df)
-
-    # Generate visualizations
-    generate_visualizations(df, analysis)
-
-    # Create Markdown report
-    create_markdown_report(analysis, filename)
-
-    # Get the story from LLM
-    story = get_llm_summary(df, analysis)
-
-    # Append the LLM-generated story to the README.md
-    with open('README.md', 'a') as f:
-        f.write(f"\n## Insights and Implications\n")
-        f.write(story)
-
-    print("Analysis complete! Check the generated README.md and PNG files.")
+def run_analysis(file_path):
+    """Main function to load, analyze, visualize, and generate report."""
+    # Load data
+    data = load_data(file_path)
+    if data is None:
+        return
+    
+    # Send the data for analysis to the LLM
+    analysis_results = analyze_with_llm(data)
+    
+    # Visualize the data
+    visualize_data(data)
+    
+    # Generate a comprehensive narrative
+    narrative = generate_narrative(data, analysis_results)
+    
+    # Save everything
+    save_results(narrative)
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Please provide a CSV file to analyze.")
-    else:
-        filename = sys.argv[1]
-        main(filename)
+    # Set the file path to the dataset
+    dataset_path = os.path.join(os.getcwd(), "datasets", "your_dataset.csv")
+    run_analysis(dataset_path)
