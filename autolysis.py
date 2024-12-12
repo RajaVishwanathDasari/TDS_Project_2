@@ -49,6 +49,9 @@ def analyze_with_llm(data):
         )
         analysis_results = response.choices[0].text.strip()
         return analysis_results
+    except openai.error.AuthenticationError as e:
+        print(f"Authentication Error: {e}")
+        return "Authentication failed, please check your API token."
     except Exception as e:
         print(f"Error in LLM request: {e}")
         return "Analysis not available."
@@ -57,20 +60,29 @@ def visualize_data(data):
     """Generate and save visualizations."""
     plt.figure(figsize=(10, 8))
 
-    # Generate a correlation heatmap
-    corr_matrix = data.corr()
-    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f')
-    plt.title("Correlation Matrix")
-    plt.savefig("correlation_matrix.png")
-    print("Correlation matrix saved.")
+    # Select only numeric columns for the correlation matrix
+    numeric_data = data.select_dtypes(include=[np.number])
 
-    # Generate a histogram of the first column (for demonstration)
-    data.iloc[:, 0].hist(bins=20, alpha=0.75)
-    plt.title(f"Histogram of {data.columns[0]}")
-    plt.xlabel(data.columns[0])
-    plt.ylabel("Frequency")
-    plt.savefig("histogram.png")
-    print("Histogram saved.")
+    if not numeric_data.empty:
+        # Generate a correlation heatmap
+        corr_matrix = numeric_data.corr()
+        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+        plt.title("Correlation Matrix")
+        plt.savefig("correlation_matrix.png")
+        print("Correlation matrix saved.")
+    else:
+        print("No numeric columns to calculate correlations.")
+
+    # Generate a histogram of the first numeric column (for demonstration)
+    if not numeric_data.empty:
+        numeric_data.iloc[:, 0].hist(bins=20, alpha=0.75)
+        plt.title(f"Histogram of {numeric_data.columns[0]}")
+        plt.xlabel(numeric_data.columns[0])
+        plt.ylabel("Frequency")
+        plt.savefig("histogram.png")
+        print("Histogram saved.")
+    else:
+        print("No numeric columns to generate histograms.")
 
 def generate_narrative(data, analysis_results):
     """Generate a markdown narrative for the analysis."""
@@ -123,7 +135,7 @@ if __name__ == "__main__":
     csv_file_name = sys.argv[1]
 
     # Construct the full path to the dataset (assuming the 'datasets' folder exists in the current directory)
-    dataset_path = os.path.join(os.getcwd(), csv_file_name)
+    dataset_path = os.path.join(os.getcwd(), "datasets", csv_file_name)
 
     # Check if the dataset file exists
     if not os.path.isfile(dataset_path):
