@@ -1,10 +1,10 @@
 import os
-import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import openai
+import sys
 from datetime import datetime
 import json
 
@@ -22,7 +22,6 @@ def load_data(file_path):
     """Load and clean data from a CSV file."""
     try:
         data = pd.read_csv(file_path)
-        data = data.dropna()  # Basic data cleaning
         print("Data loaded successfully")
         return data
     except Exception as e:
@@ -30,7 +29,7 @@ def load_data(file_path):
         return None
 
 def analyze_with_llm(data):
-    """Send data analysis request to OpenAI GPT-3 model."""
+    """Send data analysis request to GPT-4o-Mini via OpenAI API."""
     # Convert the data to a JSON format or any other structure that works
     data_json = data.head().to_json(orient='records')
     
@@ -40,9 +39,9 @@ def analyze_with_llm(data):
     """
 
     try:
-        # Request LLM for analysis
+        # Request LLM (GPT-4o-Mini) for analysis
         response = openai.Completion.create(
-            model="gpt-4",  # Or another model like "gpt-3.5-turbo"
+            model="gpt-4o-mini",  # Using GPT-4o-Mini model
             prompt=prompt,
             max_tokens=500,
             temperature=0.7
@@ -56,33 +55,55 @@ def analyze_with_llm(data):
         print(f"Error in LLM request: {e}")
         return "Analysis not available."
 
-def visualize_data(data):
-    """Generate and save visualizations."""
+def summarize_statistics(data):
+    """Generate summary statistics for the dataset."""
+    summary_stats = data.describe()
+    print("\nSummary Statistics:")
+    print(summary_stats)
+
+def count_missing_values(data):
+    """Count missing values in the dataset."""
+    missing_values = data.isnull().sum()
+    missing_percentage = (missing_values / len(data)) * 100
+    print("\nMissing Values:")
+    print(pd.DataFrame({'Missing Values': missing_values, 'Percentage': missing_percentage}))
+
+def plot_correlation_matrix(data):
+    """Generate and save correlation matrix plot."""
     plt.figure(figsize=(10, 8))
+    corr_matrix = data.corr()
+    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+    plt.title("Correlation Matrix")
+    plt.savefig("correlation_matrix.png")
+    print("Correlation matrix saved.")
 
-    # Select only numeric columns for the correlation matrix
-    numeric_data = data.select_dtypes(include=[np.number])
+def detect_outliers(data):
+    """Detect outliers using IQR method."""
+    Q1 = data.quantile(0.25)
+    Q3 = data.quantile(0.75)
+    IQR = Q3 - Q1
+    outliers = ((data < (Q1 - 1.5 * IQR)) | (data > (Q3 + 1.5 * IQR)))
+    print("\nOutliers detected (True indicates outlier):")
+    print(outliers)
 
-    if not numeric_data.empty:
-        # Generate a correlation heatmap
-        corr_matrix = numeric_data.corr()
-        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f')
-        plt.title("Correlation Matrix")
-        plt.savefig("correlation_matrix.png")
-        print("Correlation matrix saved.")
-    else:
-        print("No numeric columns to calculate correlations.")
+def generate_histogram(data):
+    """Generate histograms for each numerical column."""
+    plt.figure(figsize=(10, 6))
+    for column in data.select_dtypes(include=[np.number]).columns:
+        plt.hist(data[column].dropna(), bins=20, alpha=0.7, label=column)
+    plt.title("Histograms of Numerical Columns")
+    plt.legend()
+    plt.savefig("histograms.png")
+    print("Histograms saved.")
 
-    # Generate a histogram of the first numeric column (for demonstration)
-    if not numeric_data.empty:
-        numeric_data.iloc[:, 0].hist(bins=20, alpha=0.75)
-        plt.title(f"Histogram of {numeric_data.columns[0]}")
-        plt.xlabel(numeric_data.columns[0])
-        plt.ylabel("Frequency")
-        plt.savefig("histogram.png")
-        print("Histogram saved.")
-    else:
-        print("No numeric columns to generate histograms.")
+def generate_box_plots(data):
+    """Generate box plots for each numerical column."""
+    plt.figure(figsize=(10, 6))
+    for column in data.select_dtypes(include=[np.number]).columns:
+        sns.boxplot(x=data[column], color='lightblue')
+        plt.title(f"Boxplot of {column}")
+        plt.savefig(f"{column}_boxplot.png")
+        print(f"Boxplot for {column} saved.")
 
 def generate_narrative(data, analysis_results):
     """Generate a markdown narrative for the analysis."""
@@ -96,7 +117,7 @@ def generate_narrative(data, analysis_results):
     # Adding some basic visualizations as images
     narrative += "## Visualizations\n"
     narrative += "### Correlation Matrix\n![Correlation Matrix](correlation_matrix.png)\n"
-    narrative += "### Histogram\n![Histogram](histogram.png)\n"
+    narrative += "### Histograms\n![Histograms](histograms.png)\n"
 
     return narrative
 
@@ -113,11 +134,16 @@ def run_analysis(file_path):
     if data is None:
         return
     
+    # Perform generic analysis
+    summarize_statistics(data)
+    count_missing_values(data)
+    plot_correlation_matrix(data)
+    detect_outliers(data)
+    generate_histogram(data)
+    generate_box_plots(data)
+
     # Send the data for analysis to the LLM
     analysis_results = analyze_with_llm(data)
-    
-    # Visualize the data
-    visualize_data(data)
     
     # Generate a comprehensive narrative
     narrative = generate_narrative(data, analysis_results)
@@ -134,12 +160,12 @@ if __name__ == "__main__":
     # Get the CSV file name from the command-line argument
     csv_file_name = sys.argv[1]
 
-    # Construct the full path to the dataset (assuming the 'datasets' folder exists in the current directory)
+    # Construct the full path to the dataset (assuming the file is in the current directory)
     dataset_path = os.path.join(os.getcwd(), csv_file_name)
 
     # Check if the dataset file exists
     if not os.path.isfile(dataset_path):
-        print(f"Error: The file '{csv_file_name}' does not exist in the 'datasets' folder.")
+        print(f"Error: The file '{csv_file_name}' does not exist.")
         sys.exit(1)
 
     # Run the analysis with the dataset path
