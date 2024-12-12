@@ -154,7 +154,7 @@ def create_readme(ai_story, charts, summary):
 
 def analyze_csv(input_file):
     # Load dataset
-    dataframe = pd.read_csv(input_file)
+    dataframe = pd.read_csv(input_file, encoding = 'latin1')
 
     # Step 1: Perform generic analysis
     summary, correlation_matrix, outliers = perform_generic_analysis(dataframe)
