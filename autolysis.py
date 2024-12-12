@@ -3,12 +3,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from airproxy import AirProxy
+import openai
 from datetime import datetime
 import json
 
-# Initialize the airproxy connection
-airproxy = AirProxy(api_key="your_airproxy_api_key")
+# Initialize OpenAI API
+openai.api_key = 'your-openai-api-key'
 
 def load_data(file_path):
     """Load and clean data from a CSV file."""
@@ -22,13 +22,27 @@ def load_data(file_path):
         return None
 
 def analyze_with_llm(data):
-    """Send data analysis request to the LLM via airproxy."""
-    prompt = f"Analyze the following dataset and provide insights:\n\n{data.head().to_json(orient='records')}"
-    response = airproxy.send_prompt(prompt)
+    """Send data analysis request to OpenAI GPT-3 model."""
+    # Convert the data to a JSON format or any other structure that works
+    data_json = data.head().to_json(orient='records')
     
-    if response and "text" in response:
-        return response["text"]
-    else:
+    prompt = f"""
+    Analyze the following dataset and provide insights, correlations, and potential trends:
+    {data_json}
+    """
+
+    try:
+        # Request LLM for analysis
+        response = openai.Completion.create(
+            model="gpt-4",  # Or another model like "gpt-3.5-turbo"
+            prompt=prompt,
+            max_tokens=500,
+            temperature=0.7
+        )
+        analysis_results = response.choices[0].text.strip()
+        return analysis_results
+    except Exception as e:
+        print(f"Error in LLM request: {e}")
         return "Analysis not available."
 
 def visualize_data(data):
