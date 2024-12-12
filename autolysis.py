@@ -135,7 +135,7 @@ if __name__ == "__main__":
     csv_file_name = sys.argv[1]
 
     # Construct the full path to the dataset (assuming the 'datasets' folder exists in the current directory)
-    dataset_path = os.path.join(os.getcwd(), "datasets", csv_file_name)
+    dataset_path = os.path.join(os.getcwd(), csv_file_name)
 
     # Check if the dataset file exists
     if not os.path.isfile(dataset_path):
