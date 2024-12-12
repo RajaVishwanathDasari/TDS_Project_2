@@ -1,122 +1,147 @@
 import os
-import sys
 import pandas as pd
-import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from io import BytesIO
 import openai
+import numpy as np
 
-# Setup OpenAI API
-def setup_openai_api():
-    try:
-        api_token = os.environ["AIPROXY_TOKEN"]
-        openai.api_key = api_token
-    except KeyError:
-        print("Error: AIPROXY_TOKEN environment variable not set.")
-        sys.exit(1)
+# Set up the OpenAI API key from environment variable
+openai.api_key = os.getenv("AIPROXY_TOKEN")
 
-# Utility function to save and return chart path
-def save_chart(fig, filename):
-    path = f"{filename}.png"
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-    return path
+def analyze_data(df):
+    """
+    Perform basic analysis on the dataset: Summary statistics, missing values, correlations, and outliers.
+    Returns a dictionary of analysis results.
+    """
+    analysis = {}
 
-# Generate a summary of the dataset
-def dataset_summary(df):
-    summary = {
-        "shape": df.shape,
-        "columns": df.dtypes.to_dict(),
-        "missing_values": df.isnull().sum().to_dict(),
-        "summary_statistics": df.describe(include='all').to_dict()
-    }
-    return summary
+    # Summary statistics
+    analysis['summary'] = df.describe(include='all')
 
-# Generate visualizations
-def generate_visualizations(df):
-    charts = []
-    if len(df.select_dtypes(include=[np.number]).columns) > 1:
-        corr = df.corr()
-        fig, ax = plt.subplots(figsize=(8, 6))
-        sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", ax=ax)
-        charts.append(save_chart(fig, "correlation_matrix"))
+    # Missing values
+    analysis['missing_values'] = df.isnull().sum()
 
-    if len(df.select_dtypes(include=[np.number]).columns) > 0:
-        for col in df.select_dtypes(include=[np.number]).columns[:3]:
-            fig, ax = plt.subplots()
-            sns.histplot(df[col].dropna(), kde=True, ax=ax)
-            ax.set_title(f"Distribution of {col}")
-            charts.append(save_chart(fig, f"distribution_{col}"))
+    # Correlation matrix
+    analysis['correlation_matrix'] = df.corr()
 
-    return charts
+    # Check for outliers using IQR
+    Q1 = df.quantile(0.25)
+    Q3 = df.quantile(0.75)
+    IQR = Q3 - Q1
+    outliers = ((df < (Q1 - 1.5 * IQR)) | (df > (Q3 + 1.5 * IQR))).sum()
+    analysis['outliers'] = outliers
 
-# Interact with LLM for analysis and narrative
-def interact_with_llm(prompt):
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a data analysis assistant."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return response["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"Error interacting with LLM: {e}"
+    return analysis
 
-# Main script execution
-def main():
-    if len(sys.argv) != 2:
-        print("Usage: uv run autolysis.py <dataset.csv>")
-        sys.exit(1)
+def generate_visualizations(df, analysis):
+    """
+    Generate visualizations from the analysis: Correlation heatmap and histogram of numerical columns.
+    """
+    # Create a correlation heatmap
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(analysis['correlation_matrix'], annot=True, cmap='coolwarm', fmt='.2f')
+    plt.title('Correlation Matrix')
+    plt.savefig('correlation_matrix.png', format='png')
+    plt.close()
 
-    dataset_path = sys.argv[1]
-    if not os.path.exists(dataset_path):
-        print(f"Error: File {dataset_path} does not exist.")
-        sys.exit(1)
+    # Create histograms for numerical columns
+    numerical_cols = df.select_dtypes(include=[np.number]).columns
+    for col in numerical_cols:
+        plt.figure(figsize=(8, 6))
+        sns.histplot(df[col], kde=True, bins=30)
+        plt.title(f'{col} Distribution')
+        plt.xlabel(col)
+        plt.ylabel('Frequency')
+        plt.savefig(f'{col}_distribution.png', format='png')
+        plt.close()
 
-    setup_openai_api()
+def create_markdown_report(analysis, filename):
+    """
+    Create a README.md report with the analysis results, visualizations, and insights.
+    """
+    with open('README.md', 'w') as f:
+        # Add title and description of the analysis
+        f.write(f"# Automated Analysis of {filename}\n\n")
+        f.write(f"## Summary Statistics\n")
+        f.write(f"{analysis['summary']}\n\n")
 
-    df = pd.read_csv(dataset_path)
-    summary = dataset_summary(df)
-    charts = generate_visualizations(df)
+        # Add missing values
+        f.write(f"## Missing Values\n")
+        f.write(f"{analysis['missing_values']}\n\n")
 
-    llm_prompt = (
-        f"Dataset Analysis:\n\n"
-        f"Shape: {summary['shape']}\n\n"
-        f"Columns and Types: {summary['columns']}\n\n"
-        f"Missing Values: {summary['missing_values']}\n\n"
-        f"Summary Statistics: {summary['summary_statistics']}\n\n"
-        f"Generate a story summarizing the dataset and providing insights based on this information. "
-        f"Refer to the generated visualizations as supporting evidence."
+        # Add outlier summary
+        f.write(f"## Outliers\n")
+        f.write(f"{analysis['outliers']}\n\n")
+
+        # Add visualizations
+        f.write(f"## Visualizations\n")
+        f.write(f"![Correlation Matrix](correlation_matrix.png)\n")
+        for col in analysis['summary'].columns:
+            if col in analysis['outliers'].index:
+                f.write(f"![{col} Distribution]({col}_distribution.png)\n")
+
+def get_llm_summary(df, analysis):
+    """
+    Use OpenAI API to generate a narrative summary of the analysis results.
+    """
+    # Prepare the prompt for the LLM
+    prompt = f"""
+    The dataset contains the following columns: {', '.join(df.columns)}
+    The summary statistics are as follows:
+    {analysis['summary']}
+
+    There are missing values in the following columns:
+    {analysis['missing_values']}
+
+    The correlation matrix is:
+    {analysis['correlation_matrix']}
+
+    The outliers detected in the dataset are:
+    {analysis['outliers']}
+
+    Please summarize the key insights from this analysis and suggest potential actions or conclusions.
+    """
+
+    # Request the LLM to generate the summary
+    response = openai.Completion.create(
+        model="gpt-4o-mini",  # Use the correct model for this task
+        prompt=prompt,
+        max_tokens=500
     )
 
-    narrative = interact_with_llm(llm_prompt)
+    return response.choices[0].text.strip()
 
-    readme_content = f"""# Automated Analysis Report
+def main(filename):
+    """
+    Main function to load the dataset, perform analysis, generate visualizations,
+    create a Markdown report, and ask LLM to write a story about the data.
+    """
+    # Load the dataset
+    df = pd.read_csv(filename)
 
-## Dataset Summary
+    # Analyze the data
+    analysis = analyze_data(df)
 
-- **Shape:** {summary['shape']}
-- **Columns:** {summary['columns']}
-- **Missing Values:** {summary['missing_values']}
+    # Generate visualizations
+    generate_visualizations(df, analysis)
 
-## Insights and Narrative
+    # Create Markdown report
+    create_markdown_report(analysis, filename)
 
-{narrative}
+    # Get the story from LLM
+    story = get_llm_summary(df, analysis)
 
-## Visualizations
+    # Append the LLM-generated story to the README.md
+    with open('README.md', 'a') as f:
+        f.write(f"\n## Insights and Implications\n")
+        f.write(story)
 
-"""
-
-    for chart in charts:
-        readme_content += f"![{chart}]({chart})\n\n"
-
-    with open("README.md", "w") as f:
-        f.write(readme_content)
-
-    print("Analysis complete. Results saved to README.md and PNG files.")
+    print("Analysis complete! Check the generated README.md and PNG files.")
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) < 2:
+        print("Please provide a CSV file to analyze.")
+    else:
+        filename = sys.argv[1]
+        main(filename)
