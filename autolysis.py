@@ -1,4 +1,5 @@
 import os
+import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,8 +8,15 @@ import openai
 from datetime import datetime
 import json
 
-# Initialize OpenAI API
-openai.api_key = 'your-openai-api-key'
+# Retrieve the API token from environment variable
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
+
+# Ensure the token is set
+if AIPROXY_TOKEN is None:
+    raise ValueError("AIPROXY_TOKEN environment variable is not set.")
+
+# Initialize OpenAI API with the retrieved token
+openai.api_key = AIPROXY_TOKEN
 
 def load_data(file_path):
     """Load and clean data from a CSV file."""
@@ -106,6 +114,21 @@ def run_analysis(file_path):
     save_results(narrative)
 
 if __name__ == "__main__":
-    # Set the file path to the dataset
-    dataset_path = os.path.join(os.getcwd(), "datasets", "your_dataset.csv")
+    # Check if the correct number of arguments is provided
+    if len(sys.argv) != 2:
+        print("Usage: uv run autolysis.py <csv_file_name>")
+        sys.exit(1)
+
+    # Get the CSV file name from the command-line argument
+    csv_file_name = sys.argv[1]
+
+    # Construct the full path to the dataset (assuming the 'datasets' folder exists in the current directory)
+    dataset_path = os.path.join(os.getcwd(), csv_file_name)
+
+    # Check if the dataset file exists
+    if not os.path.isfile(dataset_path):
+        print(f"Error: The file '{csv_file_name}' does not exist in the 'datasets' folder.")
+        sys.exit(1)
+
+    # Run the analysis with the dataset path
     run_analysis(dataset_path)
