@@ -15,8 +15,7 @@ openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 openai_api_key = os.environ.get("AIPROXY_TOKEN")
 
 def summarize_statistics(summary_statistics):
-    """Reduce the size of summary statistics to the most relevant metrics."""
-    # Extract only key statistics: mean, median, std, min, and max
+    """Summarize the dataset's statistics, focusing on key metrics."""
     summarized_stats = {}
     for column, stats in summary_statistics.items():
         summarized_stats[column] = {
@@ -28,7 +27,7 @@ def summarize_statistics(summary_statistics):
     return summarized_stats
 
 def filter_correlation_matrix(correlation_matrix, threshold=0.8):
-    """Filter out low-correlation pairs to reduce the size of the correlation matrix."""
+    """Filter out low-correlation pairs to focus on significant relationships."""
     filtered_correlation = {}
     for col, correlations in correlation_matrix.items():
         high_corr = {k: v for k, v in correlations.items() if abs(v) > threshold}
@@ -38,7 +37,6 @@ def filter_correlation_matrix(correlation_matrix, threshold=0.8):
 
 def generate_dynamic_prompt(data_summary, analysis_results, charts, previous_responses=None):
     """Generate a dynamic prompt that incorporates previous responses and analysis."""
-    # Ensure all data types are JSON serializable
     data_summary = {
         'columns': list(data_summary['columns']),
         'data_types': {k: str(v) for k, v in data_summary['data_types'].items()},
@@ -58,13 +56,18 @@ def generate_dynamic_prompt(data_summary, analysis_results, charts, previous_res
     1. Dataset summary: columns, data types, missing values, and summary statistics.
     2. Analytical insights: correlation matrix, outlier details, and any patterns or anomalies.
     3. Visualizations: include descriptions of the provided charts.
+    
+    **Explanation of Techniques Applied:**
+    - Summary statistics: Provides a quick snapshot of the dataset, including mean, standard deviation, and range of values.
+    - Correlation analysis: Used to identify potential relationships between numerical variables, guiding feature selection for predictive models.
+    - Outlier detection: Identifies extreme values that might distort analysis or indicate important anomalies.
+    - Visualizations: Histograms and boxplots provide an intuitive way to understand data distributions and detect outliers visually.
 
     Data Summary: {data_summary}
     Analysis Results: {analysis_results}
     Charts: {charts}
     """
 
-    # If there were previous responses, incorporate them into the prompt for context
     if previous_responses:
         prompt = "\n".join([previous_responses, prompt])
 
@@ -107,6 +110,7 @@ def perform_generic_analysis(dataframe):
     numeric_columns = dataframe.select_dtypes(include=[np.number])
     correlation_matrix = numeric_columns.corr().to_dict() if not numeric_columns.empty else None
 
+    # Outlier detection using Interquartile Range (IQR)
     if not numeric_columns.empty:
         Q1 = numeric_columns.quantile(0.25)
         Q3 = numeric_columns.quantile(0.75)
@@ -133,7 +137,7 @@ def create_histograms(dataframe, numerical_cols):
     return charts
 
 def create_boxplots(dataframe, numerical_cols):
-    """Generate a boxplot for numerical columns."""
+    """Generate a boxplot for numerical columns to detect outliers."""
     plt.figure(figsize=(10, 6))
     sns.boxplot(data=dataframe[numerical_cols], orient='h')
     plt.title('Boxplot for Outlier Detection')
