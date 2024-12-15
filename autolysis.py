@@ -1,14 +1,14 @@
-# /// script
-# requires-python = ">=3.11"
+# Add to dependencies list
 # dependencies = [
 #   "httpx",
 #   "pandas",
 #   "numpy",
 #   "seaborn",
 #   "requests",
-#   "pathlib"
+#   "pathlib",
+#   "matplotlib"
 # ]
-# ///
+
 
 import os
 import pandas as pd
@@ -16,6 +16,7 @@ import numpy as np
 import seaborn as sns
 import requests
 import sys
+import matplotlib.pyplot as plt  # Add this import for plotting
 from pathlib import Path
 import json
 
@@ -272,9 +273,11 @@ def create_histograms(dataframe, bins=10):
     numeric_columns = dataframe.select_dtypes(include=[np.number])
 
     for col in numeric_columns.columns:
+        plt.figure()  # Create a new figure for each plot
         plot = sns.histplot(dataframe[col], bins=bins)
         plot.set(title=f"Histogram of {col}")
-        histograms.append(plot)
+        histograms.append(plt.gcf())  # Save the current figure
+        plt.close()  # Close the figure to avoid overlapping in memory
 
     return histograms
 
@@ -284,9 +287,11 @@ def create_boxplots(dataframe):
     numeric_columns = dataframe.select_dtypes(include=[np.number])
 
     for col in numeric_columns.columns:
+        plt.figure()  # Create a new figure for each plot
         plot = sns.boxplot(data=dataframe, x=col)
         plot.set(title=f"Boxplot of {col}")
-        boxplots.append(plot)
+        boxplots.append(plt.gcf())  # Save the current figure
+        plt.close()  # Close the figure to avoid overlapping in memory
 
     return boxplots
 
@@ -294,9 +299,31 @@ def create_correlation_heatmap(dataframe):
     """Create a correlation heatmap using seaborn."""
     numeric_data = dataframe.select_dtypes(include=[np.number])
     corr_matrix = numeric_data.corr()
+    plt.figure()  # Create a new figure
     heatmap = sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5)
     heatmap.set(title="Correlation Heatmap")
-    return heatmap
+    plt.close()  # Close the plot to prevent overlapping
+    return plt.gcf()  # Return the figure
+    
+def create_readme(ai_story, charts, summary):
+    """Generate a README file with detailed analysis and charts."""
+    with open('README.md', 'w') as f:
+        f.write("# Dataset Analysis Report\n\n")
+        f.write(f"## Summary of Dataset\n\n")
+        f.write(f"Columns: {', '.join(summary['columns'])}\n")
+        f.write(f"Data Types: {json.dumps(summary['data_types'], indent=2)}\n")
+        f.write(f"Missing Values: {json.dumps(summary['missing_values'], indent=2)}\n")
+        f.write(f"Summary Statistics: {json.dumps(summary['summary_statistics'], indent=2)}\n")
+        f.write("\n## Analysis Results\n")
+        f.write(ai_story)
+        f.write("\n## Charts\n")
+        
+        for chart in charts:
+            # Save each figure to a file (PNG) and link to them in the README
+            chart_file = f"chart_{charts.index(chart)}.png"
+            chart.savefig(chart_file)
+            f.write(f"![Chart {charts.index(chart)}]({chart_file})\n")
+
 
 def analyze_csv(input_file):
     """Main function to perform the analysis on the provided CSV file."""
