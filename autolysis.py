@@ -53,7 +53,11 @@ def generate_story(data_summary, analysis_results, charts):
     1. A brief summary of the data: what the data consists of, column names, types, and any relevant patterns or issues.
     2. The analysis performed: including steps like correlation, outlier detection, and any other relevant analysis.
     3. Insights discovered: any patterns, anomalies, trends, or key takeaways from the data.
-    4. Implications: what actions can be taken based on the insights? What do these findings mean for decision-making?
+        - Describe the key correlations found in the data and their implications.
+        - Discuss the outliers detected and what they mean for the data analysis.
+    4. Visualizations: describe the visualizations and what insights they provide.
+        - Discuss the histograms, boxplot, and correlation heatmap, and how they help illustrate the findings.
+    5. Implications: what actions can be taken based on the insights? What do these findings mean for decision-making?
     
     Data Summary: {data_summary}
     
@@ -87,6 +91,7 @@ def generate_story(data_summary, analysis_results, charts):
         print(f"Error: {response.status_code}")
         print(response.text)
         return "AI generation failed."
+
 
 def perform_generic_analysis(dataframe):
     # Summarize dataset: column names, types, missing values, summary statistics
