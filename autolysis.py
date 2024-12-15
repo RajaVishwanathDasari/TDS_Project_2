@@ -14,19 +14,17 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pathlib import Path
 import seaborn as sns
-import json
+import openai
 import requests
+from pathlib import Path
 import sys
-from statsmodels.tsa.arima.model import ARIMA
 
-# Set your custom proxy URL for the OpenAI API
-openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+# Set your OpenAI API key
+openai_api_key = os.environ.get("OPENAI_API_KEY")  # Ensure you set your OpenAI API key
+openai.api_key = openai_api_key
 
-# Load your AIPROXY_TOKEN environment variable
-openai_api_key = os.environ.get("AIPROXY_TOKEN")
-
+openai_api_url = "https://api.openai.com/v1/chat/completions"
 
 def perform_generic_analysis(dataframe):
     """
@@ -52,8 +50,7 @@ def perform_generic_analysis(dataframe):
 
     return summary, correlation_matrix
 
-
-def detect_outliers_z_score(dataframe, threshold=3):
+def detect_outliers_zscore(dataframe, threshold=3):
     """
     Detect outliers in numeric columns using the Z-score method.
 
@@ -76,37 +73,37 @@ def detect_outliers_z_score(dataframe, threshold=3):
 
     return dataframe, outlier_summary
 
-
 def perform_time_series_analysis(dataframe, target_column, date_column):
     """
-    Perform time series forecasting using ARIMA if time-related data is detected.
+    Perform basic time series analysis such as detecting trends and seasonality 
+    using time-based grouping.
 
     Parameters:
     dataframe (pd.DataFrame): The dataset to analyze.
-    target_column (str): The column to forecast.
+    target_column (str): The column to analyze trends.
     date_column (str): The column representing dates.
 
     Returns:
-    dict: Forecast results and ARIMA model summary.
+    dict: Summary of trends and grouped statistics.
     """
     try:
         dataframe[date_column] = pd.to_datetime(dataframe[date_column])
-        dataframe.set_index(date_column, inplace=True)
-        ts_data = dataframe[target_column].dropna()
+        dataframe.sort_values(by=date_column, inplace=True)
 
-        # Fit ARIMA model
-        model = ARIMA(ts_data, order=(1, 1, 1))
-        fitted_model = model.fit()
-        forecast = fitted_model.forecast(steps=10)
+        # Aggregate target_column by month and year for trend analysis
+        dataframe['year_month'] = dataframe[date_column].dt.to_period('M')
+        grouped = dataframe.groupby('year_month')[target_column].mean().reset_index()
+
+        # Identify trends (e.g., overall increase/decrease)
+        trend = "increasing" if grouped[target_column].iloc[-1] > grouped[target_column].iloc[0] else "decreasing"
 
         return {
-            'forecast': forecast.tolist(),
-            'model_summary': fitted_model.summary().as_text()
+            'trend': trend,
+            'monthly_averages': grouped.to_dict(orient='records')
         }
     except Exception as e:
         print(f"Time series analysis failed: {e}")
         return None
-
 
 def dynamic_cluster_analysis(dataframe, max_clusters=5):
     """
@@ -135,7 +132,6 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
     dataframe['cluster'] = kmeans.fit_predict(scaled_data)
 
     return dataframe[['cluster']]
-
 
 def create_histograms(dataframe, bins=10):
     """
@@ -167,7 +163,6 @@ def create_histograms(dataframe, bins=10):
 
     return histograms
 
-
 def create_correlation_heatmap(dataframe):
     """
     Create a labeled correlation heatmap for numeric columns.
@@ -195,7 +190,6 @@ def create_correlation_heatmap(dataframe):
     plt.tight_layout()
     return plt.gcf()
 
-
 def generate_story(data_summary, analysis_results, charts, advanced_analysis_results):
     """
     Generate a detailed narrative using LLM API based on dataset analysis, with iterative refinements.
@@ -209,42 +203,70 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
     Returns:
     str: Generated narrative.
     """
+    # Define the functions the AI can call
+    functions = [
+        {
+            "name": "get_data_summary",
+            "description": "Returns the dataset summary statistics.",
+            "parameters": {
+                "summary": data_summary
+            }
+        },
+        {
+            "name": "get_analysis_insights",
+            "description": "Returns analysis results like correlations and outliers.",
+            "parameters": {
+                "analysis": analysis_results
+            }
+        },
+        {
+            "name": "get_advanced_analysis",
+            "description": "Returns advanced analysis like time-series and clustering insights.",
+            "parameters": {
+                "advanced_analysis": advanced_analysis_results
+            }
+        },
+        {
+            "name": "describe_charts",
+            "description": "Describes key observations from charts.",
+            "parameters": {
+                "charts_info": [str(chart) for chart in charts]  # Convert chart objects to strings or meaningful descriptions
+            }
+        }
+    ]
+
+    # Prepare the API request prompt
     prompt = f"""
-    Write a comprehensive report:
-    1. Dataset summary: {data_summary}
-    2. Analysis insights: {analysis_results}
-    3. Advanced results: {advanced_analysis_results}
-    4. Charts: Describe key observations from visualizations.
+    You are a data analysis assistant. Based on the following data analysis, generate a comprehensive report:
+    1. Dataset summary
+    2. Insights from various analyses
+    3. Advanced analysis results (e.g., trends, clusters, outliers)
+    4. Observations from the visualizations provided.
+
+    The functions to call for specific insights are as follows:
     """
 
-    headers = {
-        "Authorization": f"Bearer {openai_api_key}",
-        "Content-Type": "application/json"
-    }
+    # Request to the OpenAI API with function calling enabled
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",  # Use the GPT-4o-mini model
+            messages=[
+                {"role": "system", "content": "You are an assistant that helps generate detailed reports from data analysis."},
+                {"role": "user", "content": prompt},
+            ],
+            functions=functions,  # Pass the available functions
+            function_call="auto",  # Let GPT-4o-mini automatically decide which function to call
+        )
 
-    data = {
-        "model": "gpt-4",
-        "messages": [
-            {"role": "system", "content": "You are a data analysis assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 700
-    }
+        if response.status_code == 200:
+            narrative = response['choices'][0]['message']['content']
+            return narrative
+        else:
+            print(f"Error: {response.status_code}\n{response.text}")
+            return "AI generation failed."
 
-    response = requests.post(openai_api_url, headers=headers, json=data)
-    if response.status_code == 200:
-        narrative = response.json().get('choices', [{}])[0].get('message', {}).get('content', "AI generation failed.")
-
-        # Iterative refinement if key details are missing
-        if "details missing" in narrative.lower():
-            data["messages"].append({"role": "user", "content": "Refine and expand on missing details."})
-            response = requests.post(openai_api_url, headers=headers, json=data)
-            if response.status_code == 200:
-                narrative = response.json().get('choices', [{}])[0].get('message', {}).get('content', "AI generation failed.")
-
-        return narrative
-    else:
-        print(f"Error: {response.status_code}\n{response.text}")
+    except Exception as e:
+        print(f"Error occurred: {e}")
         return "AI generation failed."
 
 
@@ -259,10 +281,10 @@ def analyze_csv(input_file):
 
     # Perform analysis
     summary, correlation_matrix = perform_generic_analysis(dataframe)
-    dataframe, outlier_summary = detect_outliers_z_score(dataframe)
+    dataframe, outlier_summary = detect_outliers_zscore(dataframe)
 
     advanced_analysis_results = {
-        'time_series_forecast': perform_time_series_analysis(dataframe, 'target_column', 'date_column'),
+        'time_series_analysis': perform_time_series_analysis(dataframe, 'target_column', 'date_column'),
         'cluster_analysis': dynamic_cluster_analysis(dataframe),
         'outlier_detection': outlier_summary
     }
@@ -276,21 +298,14 @@ def analyze_csv(input_file):
 
     print(ai_story)
 
-
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python script.py <dataset.csv>")
+        print("Usage: python script.py <path_to_csv>")
         sys.exit(1)
-
+    
     input_file = sys.argv[1]
-    if not Path(input_file).is_file():
-        print(f"File {input_file} not found.")
-        sys.exit(1)
-
     analyze_csv(input_file)
 
-
-    analyze_csv(input_file)
 
 
 
