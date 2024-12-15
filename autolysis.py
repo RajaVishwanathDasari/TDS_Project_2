@@ -26,7 +26,7 @@ import sys
 openai_api_key = os.environ.get("OPENAI_API_KEY")  # Ensure you set your OpenAI API key
 openai.api_key = openai_api_key
 
-openai_api_url = "https://api.openai.com/v1/chat/completions"
+openai_api_url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 
 def perform_generic_analysis(dataframe):
     """
@@ -110,6 +110,7 @@ def perform_time_series_analysis(dataframe, target_column, date_column):
 def dynamic_cluster_analysis(dataframe, max_clusters=5):
     """
     Perform dynamic clustering analysis using K-means, with the number of clusters determined by data complexity.
+    This version does not use sklearn.
 
     Parameters:
     dataframe (pd.DataFrame): The dataset to analyze.
@@ -118,8 +119,8 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
     Returns:
     pd.DataFrame: DataFrame with assigned clusters.
     """
-    from sklearn.cluster import KMeans
-
+    
+    # Select numeric columns
     numeric_data = dataframe.select_dtypes(include=[np.number])
 
     if numeric_data.empty:
@@ -129,12 +130,42 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
     # Normalize data
     scaled_data = (numeric_data - numeric_data.min()) / (numeric_data.max() - numeric_data.min())
 
-    # Determine optimal clusters dynamically (Elbow method suggestion could be implemented here)
-    kmeans = KMeans(n_clusters=min(len(scaled_data), max_clusters), random_state=42)
-    dataframe['cluster'] = kmeans.fit_predict(scaled_data)
+    # Determine the number of clusters (max_clusters parameter)
+    n_clusters = min(len(scaled_data), max_clusters)
+    
+    # Initialize random centroids
+    centroids = scaled_data.sample(n=n_clusters, random_state=42).values
+    
+    # Function to calculate the Euclidean distance between points and centroids
+    def calculate_distance(X, centroids):
+        return np.linalg.norm(X[:, np.newaxis] - centroids, axis=2)
+
+    # Function to assign clusters based on closest centroids
+    def assign_clusters(X, centroids):
+        distances = calculate_distance(X, centroids)
+        return np.argmin(distances, axis=1)
+    
+    # K-means clustering loop
+    prev_centroids = np.zeros(centroids.shape)
+    max_iterations = 300
+    tolerance = 1e-4
+    for _ in range(max_iterations):
+        # Assign clusters based on current centroids
+        clusters = assign_clusters(scaled_data.values, centroids)
+        
+        # Update centroids
+        new_centroids = np.array([scaled_data.values[clusters == i].mean(axis=0) for i in range(n_clusters)])
+        
+        # Check for convergence (if centroids don't change significantly)
+        if np.all(np.abs(new_centroids - prev_centroids) < tolerance):
+            break
+        
+        prev_centroids = new_centroids
+
+    # Add cluster labels to the dataframe
+    dataframe['cluster'] = clusters
 
     return dataframe[['cluster']]
-
 def create_histograms(dataframe, bins=10):
     """
     Create histograms for numeric columns with labels and annotations.
@@ -209,54 +240,43 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
     functions = [
         {
             "name": "get_data_summary",
-            "description": "Returns the dataset summary statistics including basic descriptive statistics and data types.",
+            "description": "Returns the dataset summary statistics.",
             "parameters": {
                 "summary": data_summary
             }
         },
         {
             "name": "get_analysis_insights",
-            "description": "Returns analysis results, including correlations between variables and any detected outliers.",
+            "description": "Returns analysis results like correlations and outliers.",
             "parameters": {
                 "analysis": analysis_results
             }
         },
         {
             "name": "get_advanced_analysis",
-            "description": "Returns advanced analysis results such as time-series trends, clustering insights, and outlier detection summaries.",
+            "description": "Returns advanced analysis like time-series and clustering insights.",
             "parameters": {
                 "advanced_analysis": advanced_analysis_results
             }
         },
         {
             "name": "describe_charts",
-            "description": "Provides a narrative for the charts by describing key patterns, trends, and outliers observed in the visualizations.",
+            "description": "Describes key observations from charts.",
             "parameters": {
                 "charts_info": [str(chart) for chart in charts]  # Convert chart objects to strings or meaningful descriptions
             }
         }
     ]
 
-    # Updated prompt for clearer structure and expectations from the LLM
+    # Prepare the API request prompt
     prompt = f"""
-    You are a data analysis assistant. Your task is to generate a comprehensive, structured report that integrates the following components:
+    You are a data analysis assistant. Based on the following data analysis, generate a comprehensive report:
+    1. Dataset summary
+    2. Insights from various analyses
+    3. Advanced analysis results (e.g., trends, clusters, outliers)
+    4. Observations from the visualizations provided.
 
-    1. **Dataset Summary**:
-        Provide a summary of the dataset including the key statistics (such as mean, median, and standard deviation), data types of each column, and any missing values in the dataset.
-        
-    2. **Analysis Insights**:
-        Present insights derived from the dataset analysis. This includes a correlation matrix that identifies relationships between numeric variables and any significant outliers detected based on Z-scores or other methods.
-
-    3. **Advanced Analysis**:
-        Offer deeper insights derived from advanced analyses such as:
-            - Time-series analysis (e.g., trends, seasonality, etc.),
-            - Clustering results (including insights on groupings),
-            - Outlier detection summaries (showing which values were identified as outliers and their impact on the dataset).
-
-    4. **Visualizations**:
-        Describe key insights from the charts provided. For each chart, explain what the visual representation reveals about the dataset. Focus on significant patterns, anomalies, trends, and correlations that are visible in the charts.
-
-    You should provide a narrative that logically connects each of these components. Begin with the dataset summary and then proceed to the analysis insights. Make sure to describe how the advanced analysis results build on the basic analysis, leading naturally into the interpretation of the visualizations. The goal is to create a cohesive, easy-to-understand report that highlights both high-level trends and specific insights from the dataset.
+    The functions to call for specific insights are as follows:
     """
 
     # Request to the OpenAI API with function calling enabled
@@ -281,7 +301,6 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
     except Exception as e:
         print(f"Error occurred: {e}")
         return "AI generation failed."
-
 
 
 def analyze_csv(input_file):
@@ -319,6 +338,7 @@ if __name__ == "__main__":
     
     input_file = sys.argv[1]
     analyze_csv(input_file)
+
 
 
 
