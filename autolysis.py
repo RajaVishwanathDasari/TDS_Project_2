@@ -52,6 +52,11 @@ def perform_outlier_and_anomaly_detection(dataframe):
     """Perform outlier and anomaly detection using Z-score."""
     numeric_data = dataframe.select_dtypes(include=[np.number])
     
+    # Ensure there are numeric columns before calculating Z-scores
+    if numeric_data.empty:
+        print("No numeric columns found for anomaly detection.")
+        return dataframe, None
+    
     # Calculate Z-scores for anomaly detection
     z_scores = np.abs((numeric_data - numeric_data.mean()) / numeric_data.std())
     outliers = (z_scores > 3).sum(axis=0)  # Flag rows with Z-score > 3 as anomalies
@@ -152,7 +157,18 @@ def perform_cluster_analysis(dataframe, n_clusters=3, max_iter=100):
         clusters = assign_clusters(scaled_data.values, centroids)
 
         # Recalculate centroids
-        new_centroids = np.array([scaled_data.values[clusters == i].mean(axis=0) for i in range(n_clusters)])
+        new_centroids = []
+        for i in range(n_clusters):
+            # Ensure we don't calculate the mean of an empty slice
+            cluster_data = scaled_data.values[clusters == i]
+            if cluster_data.size > 0:  # Check if there's data for the cluster
+                new_centroids.append(cluster_data.mean(axis=0))
+            else:
+                # If no data for this cluster, retain the previous centroid or handle it accordingly
+                new_centroids.append(centroids[i])
+
+        # Convert new centroids to a numpy array
+        new_centroids = np.array(new_centroids)
 
         # Check for convergence (if centroids do not change)
         if np.all(centroids == new_centroids):
@@ -164,6 +180,10 @@ def perform_cluster_analysis(dataframe, n_clusters=3, max_iter=100):
     dataframe['cluster'] = clusters
 
     return dataframe[['cluster']]  # Return only the 'cluster' column for analysis purposes
+
+
+
+
 
 def perform_geographic_analysis(dataframe, lat_col='latitude', lon_col='longitude'):
     """Perform basic geographic analysis using K-means (without sklearn)."""
