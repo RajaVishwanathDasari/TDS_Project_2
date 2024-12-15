@@ -3,7 +3,6 @@
 #   "httpx",
 #   "pandas",
 #   "numpy",
-#   "seaborn",
 #   "requests",
 #   "pathlib",
 #   "matplotlib"
@@ -13,7 +12,6 @@
 import os
 import pandas as pd
 import numpy as np
-import seaborn as sns
 import requests
 import sys
 import matplotlib.pyplot as plt  # Add this import for plotting
