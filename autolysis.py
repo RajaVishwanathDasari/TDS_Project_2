@@ -29,16 +29,6 @@ openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 openai_api_key = os.environ.get("AIPROXY_TOKEN")
 
 def perform_generic_analysis(dataframe):
-    """
-    Perform basic analysis of the dataframe, including summary statistics, missing values, 
-    data types, and correlation analysis for numeric columns.
-
-    Parameters:
-    dataframe (pd.DataFrame): The dataset to analyze.
-
-    Returns:
-    tuple: Summary statistics and correlation matrix as dictionaries.
-    """
     summary = {
         'columns': list(dataframe.columns),
         'data_types': dict(dataframe.dtypes),
@@ -46,25 +36,13 @@ def perform_generic_analysis(dataframe):
         'summary_statistics': dataframe.describe(include='all').to_dict()
     }
 
-    # Correlation matrix for numeric columns
     numeric_columns = dataframe.select_dtypes(include=[np.number])
     correlation_matrix = numeric_columns.corr().to_dict() if not numeric_columns.empty else None
 
     return summary, correlation_matrix
 
 def detect_outliers_zscore(dataframe, threshold=3):
-    """
-    Detect outliers in numeric columns using the Z-score method.
-
-    Parameters:
-    dataframe (pd.DataFrame): The dataset to analyze.
-    threshold (float): The Z-score threshold to identify outliers.
-
-    Returns:
-    tuple: Updated dataframe with outlier column and a summary of detected outliers.
-    """
     numeric_data = dataframe.select_dtypes(include=[np.number])
-
     if numeric_data.empty:
         print("No numeric columns for outlier detection.")
         return dataframe, {}
@@ -76,27 +54,13 @@ def detect_outliers_zscore(dataframe, threshold=3):
     return dataframe, outlier_summary
 
 def perform_time_series_analysis(dataframe, target_column, date_column):
-    """
-    Perform basic time series analysis such as detecting trends and seasonality 
-    using time-based grouping.
-
-    Parameters:
-    dataframe (pd.DataFrame): The dataset to analyze.
-    target_column (str): The column to analyze trends.
-    date_column (str): The column representing dates.
-
-    Returns:
-    dict: Summary of trends and grouped statistics.
-    """
     try:
         dataframe[date_column] = pd.to_datetime(dataframe[date_column])
         dataframe.sort_values(by=date_column, inplace=True)
 
-        # Aggregate target_column by month and year for trend analysis
         dataframe['year_month'] = dataframe[date_column].dt.to_period('M')
         grouped = dataframe.groupby('year_month')[target_column].mean().reset_index()
 
-        # Identify trends (e.g., overall increase/decrease)
         trend = "increasing" if grouped[target_column].iloc[-1] > grouped[target_column].iloc[0] else "decreasing"
 
         return {
@@ -108,16 +72,6 @@ def perform_time_series_analysis(dataframe, target_column, date_column):
         return None
 
 def dynamic_cluster_analysis(dataframe, max_clusters=5):
-    """
-    Perform dynamic clustering analysis using K-means, with the number of clusters determined by data complexity.
-
-    Parameters:
-    dataframe (pd.DataFrame): The dataset to analyze.
-    max_clusters (int): Maximum number of clusters.
-
-    Returns:
-    pd.DataFrame: DataFrame with assigned clusters.
-    """
     from sklearn.cluster import KMeans
 
     numeric_data = dataframe.select_dtypes(include=[np.number])
@@ -126,26 +80,14 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
         print("No numeric columns for clustering.")
         return None
 
-    # Normalize data
     scaled_data = (numeric_data - numeric_data.min()) / (numeric_data.max() - numeric_data.min())
 
-    # Determine optimal clusters dynamically (Elbow method suggestion could be implemented here)
     kmeans = KMeans(n_clusters=min(len(scaled_data), max_clusters), random_state=42)
     dataframe['cluster'] = kmeans.fit_predict(scaled_data)
 
     return dataframe[['cluster']]
 
 def create_histograms(dataframe, bins=10):
-    """
-    Create histograms for numeric columns with labels and annotations.
-
-    Parameters:
-    dataframe (pd.DataFrame): The dataset to analyze.
-    bins (int): Number of bins for histograms.
-
-    Returns:
-    list: Matplotlib figures for histograms.
-    """
     histograms = []
     numeric_columns = dataframe.select_dtypes(include=[np.number])
 
@@ -157,7 +99,6 @@ def create_histograms(dataframe, bins=10):
         plt.ylabel("Frequency")
         plt.grid(axis='y', linestyle='--', alpha=0.7)
 
-        # Annotate significant points
         plt.annotate(f"Mean: {dataframe[col].mean():.2f}", xy=(0.7, 0.9), xycoords='axes fraction')
         plt.annotate(f"Max: {dataframe[col].max():.2f}", xy=(0.7, 0.85), xycoords='axes fraction')
         histograms.append(plt.gcf())
@@ -166,15 +107,6 @@ def create_histograms(dataframe, bins=10):
     return histograms
 
 def create_correlation_heatmap(dataframe):
-    """
-    Create a labeled correlation heatmap for numeric columns.
-
-    Parameters:
-    dataframe (pd.DataFrame): The dataset to analyze.
-
-    Returns:
-    Matplotlib figure: Correlation heatmap.
-    """
     numeric_data = dataframe.select_dtypes(include=[np.number])
     corr_matrix = numeric_data.corr()
     plt.figure(figsize=(10, 8))
@@ -183,7 +115,6 @@ def create_correlation_heatmap(dataframe):
     plt.xticks(rotation=45)
     plt.yticks(rotation=45)
 
-    # Add key insights as annotations
     for i in range(len(corr_matrix.columns)):
         for j in range(len(corr_matrix.columns)):
             if i != j and abs(corr_matrix.iloc[i, j]) > 0.7:
@@ -196,7 +127,7 @@ import openai
 
 def generate_story(data_summary, analysis_results, charts, advanced_analysis_results):
     """
-    Generate a detailed narrative using LLM API based on dataset analysis, with iterative refinements.
+    Generate a concise narrative using LLM API based on dataset analysis, with compact summaries for token efficiency.
 
     Parameters:
     data_summary (dict): Summary statistics of the dataset.
@@ -207,58 +138,33 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
     Returns:
     str: Generated narrative.
     """
-    # Define functions that GPT-4o-mini can call (these are placeholders and should match your processing logic)
-    functions = [
-        {
-            "name": "get_data_summary",
-            "description": "Returns the dataset summary statistics.",
-            "parameters": {
-                "summary": data_summary
-            }
-        },
-        {
-            "name": "get_analysis_insights",
-            "description": "Returns analysis results like correlations and outliers.",
-            "parameters": {
-                "analysis": analysis_results
-            }
-        },
-        {
-            "name": "get_advanced_analysis",
-            "description": "Returns advanced analysis like time-series and clustering insights.",
-            "parameters": {
-                "advanced_analysis": advanced_analysis_results
-            }
-        },
-        {
-            "name": "describe_charts",
-            "description": "Describes key observations from charts.",
-            "parameters": {
-                "charts_info": [str(chart) for chart in charts]  # Convert chart objects to strings or meaningful descriptions
-            }
-        }
-    ]
+    # Summarize the results before sending to the API for token efficiency
+    summary_text = f"Dataset summary:\nColumns: {data_summary['columns']}\nMissing values: {data_summary['missing_values']}\n"
+    summary_text += f"Data types: {data_summary['data_types']}\nStatistics: {json.dumps(data_summary['summary_statistics'], indent=2)}"
 
-    # Prepare the API request
+    analysis_text = f"\nCorrelation matrix: {json.dumps(analysis_results.get('correlation_matrix', {}), indent=2)}"
+    outliers_text = f"\nOutliers: {json.dumps(analysis_results.get('outlier_summary', {}), indent=2)}"
+
+    advanced_text = f"\nAdvanced Analysis Results:\nTime Series: {json.dumps(advanced_analysis_results.get('time_series_analysis', {}), indent=2)}"
+    advanced_text += f"\nClusters: {json.dumps(advanced_analysis_results.get('cluster_analysis', {}), indent=2)}"
+
+    charts_info = f"\nCharts Observations: {str([str(chart) for chart in charts])}"
+
+    # Prepare the request content
     prompt = f"""
-    You are a data analysis assistant. Based on the following data analysis, generate a comprehensive report:
-    1. Dataset summary
-    2. Insights from various analyses
-    3. Advanced analysis results (e.g., trends, clusters, outliers)
-    4. Observations from the visualizations provided.
-
-    The functions to call for specific insights are as follows:
+    You are a data analysis assistant. Generate a comprehensive yet concise report based on the following:
+    {summary_text}
+    {analysis_text}
+    {outliers_text}
+    {advanced_text}
+    {charts_info}
     """
 
-    # Request to the OpenAI API with function calling enabled
+    # Request to OpenAI API
     response = openai.ChatCompletion.create(
         model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are an assistant that helps generate detailed reports from data analysis."},
-            {"role": "user", "content": prompt},
-        ],
-        functions=functions,
-        function_call="auto",  # Automatically determine which function to call
+        messages=[{"role": "system", "content": "You are an assistant that helps generate detailed reports from data analysis."},
+                  {"role": "user", "content": prompt}],
     )
 
     if response.status_code == 200:
@@ -269,9 +175,7 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
         return "AI generation failed."
 
 # Example of integrating the above function into your existing workflow:
-
-# Assuming 'summary', 'correlation_matrix', 'outlier_summary', 'charts', etc., are computed
-summary = perform_generic_analysis(dataframe)
+summary, correlation_matrix = perform_generic_analysis(dataframe)
 advanced_analysis_results = {
     'time_series_analysis': perform_time_series_analysis(dataframe, 'target_column', 'date_column'),
     'cluster_analysis': dynamic_cluster_analysis(dataframe),
@@ -322,6 +226,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     analyze_csv(input_file)
+
 
 
 
