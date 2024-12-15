@@ -105,7 +105,7 @@ def create_histograms(dataframe, numerical_cols, output_folder):
         plt.figure(figsize=(8, 6))
         sns.histplot(dataframe[col], kde=True, bins=30)
         plt.title(f'Distribution of {col}')
-        chart_path = os.path.join(output_folder, f"{col}_histogram.png")
+        chart_path = f"{col}_histogram.png"
         plt.savefig(chart_path, dpi=100)
         plt.close()
         charts.append(chart_path)
@@ -116,7 +116,7 @@ def create_boxplots(dataframe, numerical_cols, output_folder):
     plt.figure(figsize=(8, 6))
     sns.boxplot(data=dataframe[numerical_cols])
     plt.title('Outlier Detection - Boxplot')
-    boxplot_path = os.path.join(output_folder, 'outliers_boxplot.png')
+    boxplot_path = 'outliers_boxplot.png'
     plt.savefig(boxplot_path, dpi=100)
     plt.close()
     return boxplot_path
@@ -127,14 +127,14 @@ def create_correlation_heatmap(correlation_matrix, output_folder):
         plt.figure(figsize=(10, 8))
         sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
         plt.title('Correlation Matrix')
-        heatmap_path = os.path.join(output_folder, 'correlation_matrix.png')
+        heatmap_path = 'correlation_matrix.png'
         plt.savefig(heatmap_path, dpi=100)
         plt.close()
         return heatmap_path
     return None
 
 def create_readme(ai_story, charts, summary, output_folder):
-    with open(os.path.join(output_folder, 'README.md'), 'w', encoding='utf-16') as readme_file:
+    with open('README.md', 'w', encoding='utf-16') as readme_file:
         readme_file.write("# Automated Data Analysis Report\n\n")
         readme_file.write("## Dataset Summary\n")
         readme_file.write(f"Columns: {summary['columns']}\n")
@@ -151,13 +151,6 @@ def create_readme(ai_story, charts, summary, output_folder):
             readme_file.write(f"![{chart}]({chart})\n")
 
 def analyze_csv(input_file):
-    # Dynamically create the output folder based on the CSV filename
-    input_file_name = Path(input_file).stem  # Get the base name of the input file without the extension
-    output_folder = os.path.join(os.getcwd(), input_file_name)
-    
-    # Create the folder if it doesn't exist
-    os.makedirs(output_folder, exist_ok=True)
-
     # Load dataset with UTF-16 encoding
     dataframe = pd.read_csv(input_file, encoding='latin1')
 
@@ -172,18 +165,18 @@ def analyze_csv(input_file):
     charts = []
 
     # Create histograms for numerical columns
-    charts.extend(create_histograms(dataframe, numerical_cols, output_folder))
+    charts.extend(create_histograms(dataframe, numerical_cols, None))
 
     # Create boxplot for outliers
-    charts.append(create_boxplots(dataframe, numerical_cols, output_folder))
+    charts.append(create_boxplots(dataframe, numerical_cols, None))
 
     # Create correlation heatmap
     if correlation_matrix is not None:
-        charts.append(create_correlation_heatmap(correlation_matrix, output_folder))
+        charts.append(create_correlation_heatmap(correlation_matrix, None))
 
     # Step 4: Create README file with analysis summary, AI insights, and charts
-    create_readme(ai_story, charts, summary, output_folder)
-    print(f"Analysis complete. Check {output_folder}/README.md, chart files.")
+    create_readme(ai_story, charts, summary, None)
+    print(f"Analysis complete. Check README.md, chart files.")
 
 if __name__ == "__main__":
     # Ensure CSV filename is passed as an argument
