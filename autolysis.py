@@ -5,6 +5,11 @@
 #   "pandas",
 #   "numpy",
 #   "seaborn",
+#   "requests",
+#   "sys",
+#   "pathlib",
+#   "json",
+#   "os"
 # ]
 # ///
 import os
