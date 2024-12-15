@@ -12,11 +12,12 @@
 #   "scikit-learn"
 # ]
 # ///
+# Import necessary libraries
 import os
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg')  # Set up Matplotlib backend for non-interactive use (important for headless environments)
 import matplotlib.pyplot as plt
 import seaborn as sns
 import requests
@@ -24,14 +25,24 @@ import sys
 from pathlib import Path
 import json
 
-# Set your custom proxy URL for the OpenAI API
-openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"  # Adjust the URL if needed
-
-# Load your AIPROXY_TOKEN environment variable (or set it directly)
-openai_api_key = os.environ.get("AIPROXY_TOKEN")
+# Set the OpenAI API URL and authentication token (ensure the token is set securely in the environment)
+openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+openai_api_key = os.environ.get("AIPROXY_TOKEN")  # Load the token from the environment variables
 
 def generate_story(data_summary, analysis_results, charts):
-    # Converting pandas data types to standard Python types to avoid issues with json serialization
+    """
+    Generates a detailed story about the dataset's analysis using the OpenAI API.
+    
+    Parameters:
+    - data_summary: A dictionary containing summary of the data (columns, types, etc.)
+    - analysis_results: A dictionary containing analysis results (correlation matrix, outliers)
+    - charts: A list of chart file paths
+    
+    Returns:
+    - A string with the AI-generated story based on the provided data and analysis.
+    """
+    
+    # Convert data types to basic Python types to ensure compatibility with JSON
     data_summary = {
         'columns': list(data_summary['columns']),
         'data_types': dict(data_summary['data_types']),
@@ -39,15 +50,16 @@ def generate_story(data_summary, analysis_results, charts):
         'summary_statistics': {k: v.to_dict() if isinstance(v, pd.DataFrame) else v for k, v in data_summary['summary_statistics'].items()}
     }
 
-    # Convert analysis results to standard Python types
+    # Prepare analysis results for the AI prompt
     analysis_results = {
         'correlation_matrix': analysis_results.get('correlation_matrix', None),
         'outliers': analysis_results.get('outliers', None)
     }
 
-    # Convert charts to a simple list of strings (file paths)
+    # Convert charts (file paths) to a simple list of strings
     charts = [str(chart) for chart in charts]
 
+    # Create the AI prompt that includes data summary, analysis results, and charts
     prompt = f"""
     Write a detailed story about the analysis of a dataset. The story should describe:
     1. A brief summary of the data: what the data consists of, column names, types, and any relevant patterns or issues.
@@ -67,24 +79,26 @@ def generate_story(data_summary, analysis_results, charts):
     Charts: {charts}
     """
     
-    # Prepare the data for the request
+    # Set the request headers with authorization token
     headers = {
         "Authorization": f"Bearer {openai_api_key}",
         "Content-Type": "application/json"
     }
 
+    # Prepare the data payload for the API request
     data = {
-        "model": "gpt-4o-mini",  # Or another model like "gpt-3.5-turbo"
+        "model": "gpt-4o-mini",  # Select the model for the OpenAI API
         "messages": [
             {"role": "system", "content": "You are a data analysis assistant."},
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 500
+        "max_tokens": 500  # Limit the response to avoid excessive tokens
     }
 
-    # Send the POST request to the OpenAI API (or proxy)
+    # Send a POST request to the OpenAI API
     response = requests.post(openai_api_url, headers=headers, json=data)
     
+    # Check if the response is successful and return the AI-generated story
     if response.status_code == 200:
         return response.json()['choices'][0]['message']['content'].strip()
     else:
@@ -92,36 +106,61 @@ def generate_story(data_summary, analysis_results, charts):
         print(response.text)
         return "AI generation failed."
 
-
 def perform_generic_analysis(dataframe):
-    # Summarize dataset: column names, types, missing values, summary statistics
+    """
+    Performs basic analysis on the given DataFrame, including dataset summary, correlation matrix, and outlier detection.
+
+    Parameters:
+    - dataframe: The input DataFrame to analyze.
+
+    Returns:
+    - A tuple containing:
+        - A dictionary with dataset summary (columns, data types, missing values, etc.)
+        - The correlation matrix of numerical columns
+        - A summary of detected outliers (based on IQR method)
+    """
+    
+    # Generate summary statistics for the dataset
     summary = {
         'columns': list(dataframe.columns),
         'data_types': dict(dataframe.dtypes),
         'missing_values': dataframe.isnull().sum().to_dict(),
-        'summary_statistics': dataframe.describe()
+        'summary_statistics': dataframe.describe()  # Get basic descriptive statistics
     }
     
-    # Only select numeric columns for correlation and outlier detection
+    # Select only numeric columns for correlation analysis and outlier detection
     numeric_columns = dataframe.select_dtypes(include=[np.number])
     
-    # Correlation matrix (only on numeric columns)
+    # Compute correlation matrix for numeric columns
     correlation_matrix = numeric_columns.corr() if numeric_columns.shape[1] > 1 else None
 
-    # Outlier detection using IQR for numeric columns
+    # Detect outliers using the IQR method
     if numeric_columns.shape[1] > 0:
         Q1 = numeric_columns.quantile(0.25)
         Q3 = numeric_columns.quantile(0.75)
         IQR = Q3 - Q1
-        outliers = ((numeric_columns < (Q1 - 1.5 * IQR)) | (numeric_columns > (Q3 + 1.5 * IQR))).sum()
+        outliers = ((numeric_columns < (Q1 - 1.5 * IQR)) | (numeric_columns > (Q3 + 1.5 * IQR))).sum()  # Count outliers
     else:
         outliers = None
 
     return summary, correlation_matrix, outliers
 
 def create_histograms(dataframe, numerical_cols, output_folder):
-    # Save histograms as PNG
-    charts = []
+    """
+    Creates histograms for the numerical columns in the DataFrame and saves them to the specified folder.
+
+    Parameters:
+    - dataframe: The DataFrame containing the data.
+    - numerical_cols: A list of column names for numerical data.
+    - output_folder: The folder where the generated histogram images will be saved.
+
+    Returns:
+    - A list of file paths to the saved histograms.
+    """
+    
+    charts = []  # Initialize list to store chart paths
+    
+    # Create histograms for each numerical column
     for col in numerical_cols:
         plt.figure(figsize=(8, 6))
         sns.histplot(dataframe[col], kde=True, bins=30)
@@ -129,11 +168,23 @@ def create_histograms(dataframe, numerical_cols, output_folder):
         chart_path = os.path.join(output_folder, f"{col}_histogram.png")
         plt.savefig(chart_path, dpi=100)
         plt.close()
-        charts.append(chart_path)
+        charts.append(chart_path)  # Append chart path to list
+    
     return charts
 
 def create_boxplots(dataframe, numerical_cols, output_folder):
-    # Boxplot for outlier detection
+    """
+    Creates a boxplot to visualize outliers and saves it to the specified folder.
+
+    Parameters:
+    - dataframe: The DataFrame containing the data.
+    - numerical_cols: A list of column names for numerical data.
+    - output_folder: The folder where the generated boxplot image will be saved.
+
+    Returns:
+    - The file path of the saved boxplot image.
+    """
+    
     plt.figure(figsize=(8, 6))
     sns.boxplot(data=dataframe[numerical_cols])
     plt.title('Outlier Detection - Boxplot')
@@ -143,7 +194,17 @@ def create_boxplots(dataframe, numerical_cols, output_folder):
     return boxplot_path
 
 def create_correlation_heatmap(correlation_matrix, output_folder):
-    # Correlation heatmap
+    """
+    Creates a heatmap to visualize the correlation matrix and saves it to the specified folder.
+
+    Parameters:
+    - correlation_matrix: The correlation matrix to visualize.
+    - output_folder: The folder where the generated heatmap image will be saved.
+
+    Returns:
+    - The file path of the saved heatmap image, or None if the correlation matrix is empty.
+    """
+    
     if correlation_matrix is not None:
         plt.figure(figsize=(10, 8))
         sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
@@ -155,6 +216,16 @@ def create_correlation_heatmap(correlation_matrix, output_folder):
     return None
 
 def create_readme(ai_story, charts, summary, output_folder):
+    """
+    Creates a README file summarizing the analysis, including AI-generated insights and visualizations.
+
+    Parameters:
+    - ai_story: The AI-generated narrative summarizing the analysis.
+    - charts: A list of chart file paths to include in the README.
+    - summary: The dataset summary.
+    - output_folder: The folder where the README file will be saved.
+    """
+    
     with open(os.path.join(output_folder, 'README.md'), 'w', encoding='utf-16') as readme_file:
         readme_file.write("# Automated Data Analysis Report\n\n")
         readme_file.write("## Dataset Summary\n")
@@ -172,19 +243,30 @@ def create_readme(ai_story, charts, summary, output_folder):
             readme_file.write(f"![{chart}]({chart})\n")
 
 def analyze_csv(input_file):
+    """
+    Performs the entire analysis process for a given CSV file, including:
+    - Data analysis
+    - AI story generation
+    - Visualization creation
+    - README generation
+    
+    Parameters:
+    - input_file: The path to the CSV file to analyze.
+    """
+    
     # Use the current directory as the output folder
     output_folder = os.getcwd()
 
-    # Load dataset with UTF-16 encoding
+    # Load dataset with UTF-16 encoding (ensure correct handling of non-ASCII characters)
     dataframe = pd.read_csv(input_file, encoding='latin1')
 
     # Step 1: Perform generic analysis
     summary, correlation_matrix, outliers = perform_generic_analysis(dataframe)
 
-    # Step 2: AI-generated story
+    # Step 2: Generate AI-powered story based on analysis
     ai_story = generate_story(summary, {'correlation_matrix': correlation_matrix, 'outliers': outliers}, [])
 
-    # Step 3: Create visualizations (e.g., histograms, outliers, correlation matrix)
+    # Step 3: Create visualizations (histograms, boxplots, correlation matrix)
     numerical_cols = dataframe.select_dtypes(include=["float64", "int64"]).columns
     charts = []
 
@@ -194,23 +276,11 @@ def analyze_csv(input_file):
     # Create boxplot for outliers
     charts.append(create_boxplots(dataframe, numerical_cols, output_folder))
 
-    # Create correlation heatmap
+    # Create correlation heatmap if applicable
     if correlation_matrix is not None:
         charts.append(create_correlation_heatmap(correlation_matrix, output_folder))
 
-    # Step 4: Create README file with analysis summary, AI insights, and charts
+    # Step 4: Generate README file with analysis summary, AI insights, and visualizations
     create_readme(ai_story, charts, summary, output_folder)
-    print(f"Analysis complete. Check {output_folder}/README.md, chart files.")
+    print(f"Analysis complete. Check {output_folder}/README.md, chart files
 
-if __name__ == "__main__":
-    # Ensure CSV filename is passed as an argument
-    if len(sys.argv) != 2:
-        print("Usage: uv run autolysis.py <dataset.csv>")
-        sys.exit(1)
-    
-    input_file = sys.argv[1]
-    if not Path(input_file).is_file():
-        print(f"File {input_file} not found.")
-        sys.exit(1)
-
-    analyze_csv(input_file)
