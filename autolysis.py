@@ -208,43 +208,54 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
     functions = [
         {
             "name": "get_data_summary",
-            "description": "Returns the dataset summary statistics.",
+            "description": "Returns the dataset summary statistics including basic descriptive statistics and data types.",
             "parameters": {
                 "summary": data_summary
             }
         },
         {
             "name": "get_analysis_insights",
-            "description": "Returns analysis results like correlations and outliers.",
+            "description": "Returns analysis results, including correlations between variables and any detected outliers.",
             "parameters": {
                 "analysis": analysis_results
             }
         },
         {
             "name": "get_advanced_analysis",
-            "description": "Returns advanced analysis like time-series and clustering insights.",
+            "description": "Returns advanced analysis results such as time-series trends, clustering insights, and outlier detection summaries.",
             "parameters": {
                 "advanced_analysis": advanced_analysis_results
             }
         },
         {
             "name": "describe_charts",
-            "description": "Describes key observations from charts.",
+            "description": "Provides a narrative for the charts by describing key patterns, trends, and outliers observed in the visualizations.",
             "parameters": {
                 "charts_info": [str(chart) for chart in charts]  # Convert chart objects to strings or meaningful descriptions
             }
         }
     ]
 
-    # Prepare the API request prompt
+    # Updated prompt for clearer structure and expectations from the LLM
     prompt = f"""
-    You are a data analysis assistant. Based on the following data analysis, generate a comprehensive report:
-    1. Dataset summary
-    2. Insights from various analyses
-    3. Advanced analysis results (e.g., trends, clusters, outliers)
-    4. Observations from the visualizations provided.
+    You are a data analysis assistant. Your task is to generate a comprehensive, structured report that integrates the following components:
 
-    The functions to call for specific insights are as follows:
+    1. **Dataset Summary**:
+        Provide a summary of the dataset including the key statistics (such as mean, median, and standard deviation), data types of each column, and any missing values in the dataset.
+        
+    2. **Analysis Insights**:
+        Present insights derived from the dataset analysis. This includes a correlation matrix that identifies relationships between numeric variables and any significant outliers detected based on Z-scores or other methods.
+
+    3. **Advanced Analysis**:
+        Offer deeper insights derived from advanced analyses such as:
+            - Time-series analysis (e.g., trends, seasonality, etc.),
+            - Clustering results (including insights on groupings),
+            - Outlier detection summaries (showing which values were identified as outliers and their impact on the dataset).
+
+    4. **Visualizations**:
+        Describe key insights from the charts provided. For each chart, explain what the visual representation reveals about the dataset. Focus on significant patterns, anomalies, trends, and correlations that are visible in the charts.
+
+    You should provide a narrative that logically connects each of these components. Begin with the dataset summary and then proceed to the analysis insights. Make sure to describe how the advanced analysis results build on the basic analysis, leading naturally into the interpretation of the visualizations. The goal is to create a cohesive, easy-to-understand report that highlights both high-level trends and specific insights from the dataset.
     """
 
     # Request to the OpenAI API with function calling enabled
@@ -269,6 +280,7 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
     except Exception as e:
         print(f"Error occurred: {e}")
         return "AI generation failed."
+
 
 
 def analyze_csv(input_file):
