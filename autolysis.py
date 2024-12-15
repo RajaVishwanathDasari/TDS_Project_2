@@ -282,5 +282,19 @@ def analyze_csv(input_file):
 
     # Step 4: Generate README file with analysis summary, AI insights, and visualizations
     create_readme(ai_story, charts, summary, output_folder)
-    print(f"Analysis complete. Check {output_folder}/README.md, chart files
+    print(f"Analysis complete. Check {output_folder}/README.md, chart files")
+
+# Main execution block
+if __name__ == "__main__":
+    # Ensure CSV filename is passed as an argument
+    if len(sys.argv) != 2:
+        print("Usage: uv run autolysis.py <dataset.csv>")
+        sys.exit(1)
+    
+    input_file = sys.argv[1]
+    if not Path(input_file).is_file():
+        print(f"File {input_file} not found.")
+        sys.exit(1)
+
+    analyze_csv(input_file)
 
