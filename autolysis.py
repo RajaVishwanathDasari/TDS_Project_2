@@ -70,18 +70,29 @@ def perform_regression_analysis(dataframe):
     
     return regression_results
 
-def perform_time_series_analysis(dataframe, date_column='date'):
+def perform_time_series_analysis(dataframe):
     """Perform basic time series analysis and forecasting using mean."""
-    # Assume the 'date_column' is already in datetime format
+    # Try to automatically detect a date column
+    date_column = None
+    for col in dataframe.columns:
+        if 'date' in col.lower() or 'time' in col.lower():  # Search for columns with "date" or "time" in the name
+            date_column = col
+            break
+
+    if date_column is None:
+        raise ValueError("No date column found in the dataset")
+
+    # Convert the detected column to datetime format
     dataframe[date_column] = pd.to_datetime(dataframe[date_column])
+
+    # Proceed with the time series analysis
     dataframe.set_index(date_column, inplace=True)
-    
-    # If there is a target_column, use it for time series forecasting (simple mean prediction)
     ts_data = dataframe['target_column'] if 'target_column' in dataframe.columns else None
     if ts_data is not None:
         forecast = ts_data.mean()  # Basic forecast: the mean of the data
         return forecast
     return None
+
 
 def perform_cluster_analysis(dataframe):
     """Perform basic clustering using K-means (without sklearn)."""
