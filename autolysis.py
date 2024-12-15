@@ -126,19 +126,6 @@ def create_correlation_heatmap(dataframe):
 import openai
 
 def generate_story(data_summary, analysis_results, charts, advanced_analysis_results):
-    """
-    Generate a concise narrative using LLM API based on dataset analysis, with compact summaries for token efficiency.
-
-    Parameters:
-    data_summary (dict): Summary statistics of the dataset.
-    analysis_results (dict): Results of various analyses.
-    charts (list): Visualization charts.
-    advanced_analysis_results (dict): Advanced analyses results.
-
-    Returns:
-    str: Generated narrative.
-    """
-    # Summarize the results before sending to the API for token efficiency
     summary_text = f"Dataset summary:\nColumns: {data_summary['columns']}\nMissing values: {data_summary['missing_values']}\n"
     summary_text += f"Data types: {data_summary['data_types']}\nStatistics: {json.dumps(data_summary['summary_statistics'], indent=2)}"
 
@@ -150,7 +137,6 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
 
     charts_info = f"\nCharts Observations: {str([str(chart) for chart in charts])}"
 
-    # Prepare the request content
     prompt = f"""
     You are a data analysis assistant. Generate a comprehensive yet concise report based on the following:
     {summary_text}
@@ -160,7 +146,6 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
     {charts_info}
     """
 
-    # Request to OpenAI API
     response = openai.ChatCompletion.create(
         model="gpt-4o-mini",
         messages=[{"role": "system", "content": "You are an assistant that helps generate detailed reports from data analysis."},
@@ -174,19 +159,6 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
         print(f"Error: {response.status_code}\n{response.text}")
         return "AI generation failed."
 
-# Example of integrating the above function into your existing workflow:
-summary, correlation_matrix = perform_generic_analysis(dataframe)
-advanced_analysis_results = {
-    'time_series_analysis': perform_time_series_analysis(dataframe, 'target_column', 'date_column'),
-    'cluster_analysis': dynamic_cluster_analysis(dataframe),
-    'outlier_detection': outlier_summary
-}
-charts = create_histograms(dataframe)
-charts.append(create_correlation_heatmap(dataframe))
-
-ai_story = generate_story(summary, {'correlation_matrix': correlation_matrix}, charts, advanced_analysis_results)
-print(ai_story)
-
 def analyze_csv(input_file):
     """
     Main function to analyze a CSV file and generate a detailed report.
@@ -194,7 +166,7 @@ def analyze_csv(input_file):
     Parameters:
     input_file (str): Path to the CSV file.
     """
-    dataframe = pd.read_csv(input_file, encoding='latin1')
+    dataframe = pd.read_csv(input_file, encoding='latin1')  # Loading the CSV into a dataframe
 
     # Perform analysis
     summary, correlation_matrix = perform_generic_analysis(dataframe)
@@ -226,6 +198,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     analyze_csv(input_file)
+
 
 
 
