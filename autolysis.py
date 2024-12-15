@@ -133,21 +133,20 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
     # Normalize data (min-max scaling)
     scaled_data = (numeric_data_filled - numeric_data_filled.min(axis=0)) / (numeric_data_filled.max(axis=0) - numeric_data_filled.min(axis=0))
 
-    # Ensure the number of rows in the dataframe matches the number of rows in scaled_data
-    if len(scaled_data) != len(dataframe):
-        # Ensure we are not dropping rows by checking the lengths
-        print(f"Warning: Length mismatch between dataframe ({len(dataframe)}) and scaled data ({len(scaled_data)}).")
-        # Align rows by matching index
-        dataframe = dataframe.iloc[:len(scaled_data)]
+    # Ensure there are no NaN values in the scaled data before applying KMeans
+    if scaled_data.isnull().values.any():
+        print("Warning: NaN values found after scaling. These will be filled.")
+        scaled_data = scaled_data.fillna(0)  # Replace NaNs with 0 or another value, based on your needs
 
     # Perform K-means clustering
     kmeans = KMeans(n_clusters=min(len(scaled_data), max_clusters), random_state=42)
     cluster_labels = kmeans.fit_predict(scaled_data)
 
-    # Ensure that cluster labels match the original dataframe's length
-    dataframe['cluster'] = np.concatenate([cluster_labels, np.full(len(dataframe) - len(cluster_labels), np.nan)])
+    # Add the cluster labels to the dataframe
+    dataframe['cluster'] = cluster_labels
 
     return dataframe[['cluster']]
+
 
 
 def create_histograms(dataframe, bins=10):
