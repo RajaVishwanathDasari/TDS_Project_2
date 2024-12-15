@@ -9,6 +9,7 @@
 #   "pathlib"
 # ]
 # ///
+
 import os
 import pandas as pd
 import numpy as np
@@ -265,43 +266,37 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
         print(f"Error: {response.status_code}\n{response.text}")
         return "AI generation failed."
 
-def create_histograms(dataframe, numerical_cols):
-    """Generate and save histograms for numerical columns using seaborn."""
-    charts = []
-    for col in numerical_cols:
-        plt.figure(figsize=(8, 6))
-        sns.histplot(dataframe[col], kde=True, bins=30)
-        plt.title(f'Distribution of {col}')
-        plt.xlabel(col)
-        plt.ylabel('Frequency')
-        chart_path = f"{col}_histogram.png"
-        plt.savefig(chart_path, dpi=100)
-        plt.close()
-        charts.append(chart_path)
-    return charts
+def create_histograms(dataframe, bins=10):
+    """Create histograms using seaborn."""
+    histograms = []
+    numeric_columns = dataframe.select_dtypes(include=[np.number])
 
-def create_boxplots(dataframe, numerical_cols):
-    """Generate a boxplot for numerical columns using seaborn."""
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(data=dataframe[numerical_cols], orient='h')
-    plt.title('Boxplot for Outlier Detection')
-    plt.xlabel('Values')
-    boxplot_path = 'outliers_boxplot.png'
-    plt.savefig(boxplot_path, dpi=100)
-    plt.close()
-    return boxplot_path
+    for col in numeric_columns.columns:
+        plot = sns.histplot(dataframe[col], bins=bins)
+        plot.set(title=f"Histogram of {col}")
+        histograms.append(plot)
 
-def create_correlation_heatmap(correlation_matrix):
-    """Generate a heatmap for the correlation matrix using seaborn."""
-    if correlation_matrix:
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(pd.DataFrame(correlation_matrix), annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
-        plt.title('Correlation Matrix Heatmap')
-        heatmap_path = 'correlation_matrix.png'
-        plt.savefig(heatmap_path, dpi=100)
-        plt.close()
-        return heatmap_path
-    return None
+    return histograms
+
+def create_boxplots(dataframe):
+    """Create boxplots using seaborn."""
+    boxplots = []
+    numeric_columns = dataframe.select_dtypes(include=[np.number])
+
+    for col in numeric_columns.columns:
+        plot = sns.boxplot(data=dataframe, x=col)
+        plot.set(title=f"Boxplot of {col}")
+        boxplots.append(plot)
+
+    return boxplots
+
+def create_correlation_heatmap(dataframe):
+    """Create a correlation heatmap using seaborn."""
+    numeric_data = dataframe.select_dtypes(include=[np.number])
+    corr_matrix = numeric_data.corr()
+    heatmap = sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5)
+    heatmap.set(title="Correlation Heatmap")
+    return heatmap
 
 def analyze_csv(input_file):
     """Main function to perform the analysis on the provided CSV file."""
