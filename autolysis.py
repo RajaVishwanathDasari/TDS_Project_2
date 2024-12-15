@@ -23,10 +23,10 @@ from pathlib import Path
 import sys
 
 # Set your OpenAI API key
-openai_api_key = os.environ.get("OPENAI_API_KEY")  # Ensure you set your OpenAI API key
+openai_api_key = os.environ.get("AIPROXY_TOKEN")  # Ensure you set your OpenAI API key
 openai.api_key = openai_api_key
 
-openai_api_url = "https://api.openai.com/v1/chat/completions"
+openai_api_url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 
 def perform_generic_analysis(dataframe):
     """
