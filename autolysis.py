@@ -120,20 +120,25 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
     """
     from sklearn.cluster import KMeans
 
+    # Select numeric columns
     numeric_data = dataframe.select_dtypes(include=[np.number])
 
     if numeric_data.empty:
         print("No numeric columns for clustering.")
         return None
 
-    # Normalize data
+    # Handle missing values: Fill NaNs with the mean of each column
+    numeric_data = numeric_data.fillna(numeric_data.mean())
+
+    # Normalize data (min-max scaling)
     scaled_data = (numeric_data - numeric_data.min()) / (numeric_data.max() - numeric_data.min())
 
-    # Determine optimal clusters dynamically (Elbow method suggestion could be implemented here)
+    # Perform K-means clustering
     kmeans = KMeans(n_clusters=min(len(scaled_data), max_clusters), random_state=42)
     dataframe['cluster'] = kmeans.fit_predict(scaled_data)
 
     return dataframe[['cluster']]
+
 
 def create_histograms(dataframe, bins=10):
     """
