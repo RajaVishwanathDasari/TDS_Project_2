@@ -6,10 +6,7 @@
 #   "numpy",
 #   "seaborn",
 #   "requests",
-#   "sys",
-#   "pathlib",
-#   "json",
-#   "os"
+#   "pathlib"
 # ]
 # ///
 import os
