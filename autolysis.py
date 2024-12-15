@@ -6,6 +6,7 @@
 #   "numpy",
 #   "requests",
 #   "pathlib",
+#   "openai",
 #   "seaborn",
 #   "matplotlib"
 # ]
