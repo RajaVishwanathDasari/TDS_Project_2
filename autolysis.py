@@ -21,7 +21,7 @@ import openai
 import requests
 from pathlib import Path
 import sys
-
+from sklearn.cluster import KMeans
 # Set your OpenAI API key
 openai_api_key = os.environ.get("AIPROXY_TOKEN")  # AIPROXY_TOKEN is the AI proxy token set in environment
 openai.api_key = openai_api_key
@@ -107,6 +107,7 @@ def perform_time_series_analysis(dataframe, target_column, date_column):
         print(f"Time series analysis failed: {e}")
         return None
 
+
 def dynamic_cluster_analysis(dataframe, max_clusters=5):
     """
     Perform dynamic clustering analysis using K-means, with the number of clusters determined by data complexity.
@@ -118,8 +119,6 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
     Returns:
     pd.DataFrame: DataFrame with assigned clusters.
     """
-    from sklearn.cluster import KMeans
-
     # Select numeric columns
     numeric_data = dataframe.select_dtypes(include=[np.number])
 
@@ -127,18 +126,22 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
         print("No numeric columns for clustering.")
         return None
 
-    # Handle missing values: Fill NaNs with the mean of each column
-    numeric_data = numeric_data.fillna(numeric_data.mean())
+    # Drop rows with NaN values
+    numeric_data_clean = numeric_data.dropna()
+
+    # If all rows were dropped, return None
+    if numeric_data_clean.empty:
+        print("No data left after dropping NaN values.")
+        return None
 
     # Normalize data (min-max scaling)
-    scaled_data = (numeric_data - numeric_data.min()) / (numeric_data.max() - numeric_data.min())
+    scaled_data = (numeric_data_clean - numeric_data_clean.min(axis=0)) / (numeric_data_clean.max(axis=0) - numeric_data_clean.min(axis=0))
 
     # Perform K-means clustering
     kmeans = KMeans(n_clusters=min(len(scaled_data), max_clusters), random_state=42)
     dataframe['cluster'] = kmeans.fit_predict(scaled_data)
 
     return dataframe[['cluster']]
-
 
 def create_histograms(dataframe, bins=10):
     """
