@@ -96,27 +96,50 @@ def perform_time_series_analysis(dataframe):
 
 
 
-def perform_cluster_analysis(dataframe):
-    """Perform basic clustering using K-means (without sklearn)."""
-    X = dataframe.select_dtypes(include=[np.number]).dropna()
-    K = 3  # Number of clusters
+import numpy as np
+import pandas as pd
 
-    # Randomly initialize centroids
-    centroids = X.sample(K).values
-    prev_centroids = centroids.copy()
-    
-    # Iterative process to assign clusters
-    for _ in range(100):  # Max iterations
-        distances = np.linalg.norm(X.values[:, np.newaxis] - centroids, axis=2)
-        clusters = np.argmin(distances, axis=1)
-        new_centroids = np.array([X[clusters == i].mean(axis=0) for i in range(K)])
-        
-        if np.all(new_centroids == prev_centroids):  # If centroids don't change, break early
+def perform_cluster_analysis(dataframe, n_clusters=3, max_iter=100):
+    """Perform cluster analysis using KMeans without sklearn and add cluster labels to the dataframe."""
+    # Select only numeric columns for clustering
+    numerical_cols = dataframe.select_dtypes(include=[np.number])
+
+    # If there are no numeric columns, return None
+    if numerical_cols.empty:
+        print("No numeric columns found for clustering.")
+        return None
+
+    # Normalize the data using min-max scaling
+    min_vals = numerical_cols.min()
+    max_vals = numerical_cols.max()
+    scaled_data = (numerical_cols - min_vals) / (max_vals - min_vals)
+
+    # Initialize centroids randomly by selecting random data points
+    centroids = scaled_data.sample(n_clusters, random_state=42).values
+
+    # Function to assign clusters
+    def assign_clusters(data, centroids):
+        distances = np.linalg.norm(data[:, np.newaxis] - centroids, axis=2)
+        return np.argmin(distances, axis=1)
+
+    # K-means algorithm (basic implementation)
+    for _ in range(max_iter):
+        # Assign clusters
+        clusters = assign_clusters(scaled_data.values, centroids)
+
+        # Recalculate centroids
+        new_centroids = np.array([scaled_data.values[clusters == i].mean(axis=0) for i in range(n_clusters)])
+
+        # Check for convergence (if centroids do not change)
+        if np.all(centroids == new_centroids):
             break
-        prev_centroids = new_centroids
-    
+
+        centroids = new_centroids
+
+    # Add cluster labels to the dataframe
     dataframe['cluster'] = clusters
-    return dataframe
+
+    return dataframe[['cluster']]  # Return only the 'cluster' column for analysis purposes
 
 def perform_geographic_analysis(dataframe, lat_col='latitude', lon_col='longitude'):
     """Perform basic geographic analysis using K-means (without sklearn)."""
@@ -245,8 +268,10 @@ def analyze_csv(input_file):
     """Main function to perform the analysis on the provided CSV file."""
     dataframe = pd.read_csv(input_file, encoding='latin1')
 
+    # Perform basic analysis
     summary, correlation_matrix, outliers = perform_generic_analysis(dataframe)
 
+    # Perform advanced analysis
     advanced_analysis_results = {
         'outlier_and_anomaly_detection': perform_outlier_and_anomaly_detection(dataframe),
         'regression_analysis': perform_regression_analysis(dataframe),
@@ -255,17 +280,28 @@ def analyze_csv(input_file):
         'geographic_analysis': perform_geographic_analysis(dataframe)
     }
 
-    ai_story = generate_story(summary, {'correlation_matrix': correlation_matrix, 'outliers': outliers}, [], advanced_analysis_results)
+    # Generate AI story with basic and advanced analysis results
+    ai_story = generate_story(
+        summary,
+        {'correlation_matrix': correlation_matrix, 'outliers': outliers},
+        [],  # Empty chart list initially, populated later
+        advanced_analysis_results  # Include advanced analysis results
+    )
 
+    # Extract numerical columns for visualizations
     numerical_cols = dataframe.select_dtypes(include=[np.number]).columns
 
+    # Create charts
     charts = create_histograms(dataframe, numerical_cols)
     charts.append(create_boxplots(dataframe, numerical_cols))
     if correlation_matrix:
         charts.append(create_correlation_heatmap(correlation_matrix))
 
+    # Generate README with detailed analysis and charts
     create_readme(ai_story, charts, summary)
+
     print("Analysis complete. Check README.md and chart files.")
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
