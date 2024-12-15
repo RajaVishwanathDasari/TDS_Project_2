@@ -14,18 +14,40 @@ openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 # Load your AIPROXY_TOKEN environment variable
 openai_api_key = os.environ.get("AIPROXY_TOKEN")
 
-def generate_story(data_summary, analysis_results, charts):
-    """Generate a detailed story using the AI API based on the dataset analysis."""
+def summarize_statistics(summary_statistics):
+    """Reduce the size of summary statistics to the most relevant metrics."""
+    # Extract only key statistics: mean, median, std, min, and max
+    summarized_stats = {}
+    for column, stats in summary_statistics.items():
+        summarized_stats[column] = {
+            'mean': stats.get('mean'),
+            'std': stats.get('std'),
+            'min': stats.get('min'),
+            'max': stats.get('max')
+        }
+    return summarized_stats
+
+def filter_correlation_matrix(correlation_matrix, threshold=0.8):
+    """Filter out low-correlation pairs to reduce the size of the correlation matrix."""
+    filtered_correlation = {}
+    for col, correlations in correlation_matrix.items():
+        high_corr = {k: v for k, v in correlations.items() if abs(v) > threshold}
+        if high_corr:
+            filtered_correlation[col] = high_corr
+    return filtered_correlation
+
+def generate_dynamic_prompt(data_summary, analysis_results, charts, previous_responses=None):
+    """Generate a dynamic prompt that incorporates previous responses and analysis."""
     # Ensure all data types are JSON serializable
     data_summary = {
         'columns': list(data_summary['columns']),
         'data_types': {k: str(v) for k, v in data_summary['data_types'].items()},
         'missing_values': data_summary['missing_values'],
-        'summary_statistics': data_summary['summary_statistics']
+        'summary_statistics': summarize_statistics(data_summary['summary_statistics'])  # Reduced stats
     }
 
     analysis_results = {
-        'correlation_matrix': analysis_results.get('correlation_matrix', None),
+        'correlation_matrix': filter_correlation_matrix(analysis_results.get('correlation_matrix', {})),  # Filtered correlations
         'outliers': analysis_results.get('outliers', None)
     }
 
@@ -41,6 +63,16 @@ def generate_story(data_summary, analysis_results, charts):
     Analysis Results: {analysis_results}
     Charts: {charts}
     """
+
+    # If there were previous responses, incorporate them into the prompt for context
+    if previous_responses:
+        prompt = "\n".join([previous_responses, prompt])
+
+    return prompt
+
+def generate_story(data_summary, analysis_results, charts):
+    """Generate a detailed story using the AI API based on the dataset analysis."""
+    prompt = generate_dynamic_prompt(data_summary, analysis_results, charts)
 
     headers = {
         "Authorization": f"Bearer {openai_api_key}",
