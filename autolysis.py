@@ -18,6 +18,7 @@ import seaborn as sns
 import json
 import requests
 import sys
+from statsmodels.tsa.arima.model import ARIMA
 
 # Set your custom proxy URL for the OpenAI API
 openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
@@ -25,129 +26,126 @@ openai_api_url = "http://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 # Load your AIPROXY_TOKEN environment variable
 openai_api_key = os.environ.get("AIPROXY_TOKEN")
 
+
 def perform_generic_analysis(dataframe):
     """
-    Perform basic analysis on the given DataFrame, including summary statistics and correlation analysis.
+    Perform basic analysis of the dataframe, including summary statistics, missing values, 
+    data types, and correlation analysis for numeric columns.
 
     Parameters:
-        dataframe (pd.DataFrame): The input dataset for analysis.
+    dataframe (pd.DataFrame): The dataset to analyze.
 
     Returns:
-        tuple: A tuple containing:
-            - summary (dict): Dataset summary with column details, data types, missing values, and summary statistics.
-            - correlation_matrix (dict or None): Correlation matrix for numeric columns, or None if no numeric columns exist.
+    tuple: Summary statistics and correlation matrix as dictionaries.
     """
     summary = {
         'columns': list(dataframe.columns),
         'data_types': dict(dataframe.dtypes),
         'missing_values': dataframe.isnull().sum().to_dict(),
-        'summary_statistics': dataframe.describe().to_dict()
+        'summary_statistics': dataframe.describe(include='all').to_dict()
     }
 
+    # Correlation matrix for numeric columns
     numeric_columns = dataframe.select_dtypes(include=[np.number])
     correlation_matrix = numeric_columns.corr().to_dict() if not numeric_columns.empty else None
 
     return summary, correlation_matrix
 
+
 def detect_outliers_z_score(dataframe, threshold=3):
     """
-    Detect outliers in the dataset using the Z-score method.
+    Detect outliers in numeric columns using the Z-score method.
 
     Parameters:
-        dataframe (pd.DataFrame): The input dataset for analysis.
-        threshold (float): The Z-score threshold for outlier detection. Defaults to 3.
+    dataframe (pd.DataFrame): The dataset to analyze.
+    threshold (float): The Z-score threshold to identify outliers.
 
     Returns:
-        tuple: A tuple containing:
-            - dataframe (pd.DataFrame): The original dataframe with an additional 'outliers' column.
-            - outliers (pd.Series): Count of outliers in each numeric column.
+    tuple: Updated dataframe with outlier column and a summary of detected outliers.
     """
     numeric_data = dataframe.select_dtypes(include=[np.number])
 
     if numeric_data.empty:
         print("No numeric columns for outlier detection.")
-        return None, None
+        return dataframe, {}
 
     z_scores = np.abs((numeric_data - numeric_data.mean()) / numeric_data.std())
+    outlier_summary = (z_scores > threshold).sum(axis=0).to_dict()
     dataframe['outliers'] = (z_scores > threshold).any(axis=1).astype(int)
-    outliers = (z_scores > threshold).sum(axis=0)
 
-    return dataframe, outliers
+    return dataframe, outlier_summary
 
-def perform_time_series_analysis(dataframe):
+
+def perform_time_series_analysis(dataframe, target_column, date_column):
     """
-    Perform time series analysis if a time-related column is detected in the dataset.
+    Perform time series forecasting using ARIMA if time-related data is detected.
 
     Parameters:
-        dataframe (pd.DataFrame): The input dataset for analysis.
+    dataframe (pd.DataFrame): The dataset to analyze.
+    target_column (str): The column to forecast.
+    date_column (str): The column representing dates.
 
     Returns:
-        pd.Series or None: A time series object based on a detected 'date' column or None if no time column exists.
+    dict: Forecast results and ARIMA model summary.
     """
-    date_column = next((col for col in dataframe.columns if 'date' in col.lower() or 'time' in col.lower()), None)
+    try:
+        dataframe[date_column] = pd.to_datetime(dataframe[date_column])
+        dataframe.set_index(date_column, inplace=True)
+        ts_data = dataframe[target_column].dropna()
 
-    if date_column is None:
-        print("No date column found for time series analysis.")
+        # Fit ARIMA model
+        model = ARIMA(ts_data, order=(1, 1, 1))
+        fitted_model = model.fit()
+        forecast = fitted_model.forecast(steps=10)
+
+        return {
+            'forecast': forecast.tolist(),
+            'model_summary': fitted_model.summary().as_text()
+        }
+    except Exception as e:
+        print(f"Time series analysis failed: {e}")
         return None
 
-    dataframe[date_column] = pd.to_datetime(dataframe[date_column])
-    dataframe.set_index(date_column, inplace=True)
-
-    # Placeholder for additional time-series specific processing
-    return dataframe
 
 def dynamic_cluster_analysis(dataframe, max_clusters=5):
     """
-    Perform clustering analysis dynamically based on the dataset's numeric columns.
+    Perform dynamic clustering analysis using K-means, with the number of clusters determined by data complexity.
 
     Parameters:
-        dataframe (pd.DataFrame): The input dataset for clustering.
-        max_clusters (int): Maximum number of clusters. Defaults to 5.
+    dataframe (pd.DataFrame): The dataset to analyze.
+    max_clusters (int): Maximum number of clusters.
 
     Returns:
-        pd.DataFrame: DataFrame with an additional 'cluster' column indicating cluster membership.
+    pd.DataFrame: DataFrame with assigned clusters.
     """
+    from sklearn.cluster import KMeans
+
     numeric_data = dataframe.select_dtypes(include=[np.number])
 
     if numeric_data.empty:
         print("No numeric columns for clustering.")
         return None
 
-    # Dynamically adjust clustering parameters
-    n_features = numeric_data.shape[1]
-    n_clusters = min(max_clusters, max(2, n_features))
+    # Normalize data
+    scaled_data = (numeric_data - numeric_data.min()) / (numeric_data.max() - numeric_data.min())
 
-    # Simple K-means implementation
-    centroids = numeric_data.sample(n_clusters, random_state=42).values
+    # Determine optimal clusters dynamically (Elbow method suggestion could be implemented here)
+    kmeans = KMeans(n_clusters=min(len(scaled_data), max_clusters), random_state=42)
+    dataframe['cluster'] = kmeans.fit_predict(scaled_data)
 
-    def assign_clusters(data, centroids):
-        distances = np.linalg.norm(data[:, np.newaxis] - centroids, axis=2)
-        return np.argmin(distances, axis=1)
+    return dataframe[['cluster']]
 
-    for _ in range(100):
-        clusters = assign_clusters(numeric_data.values, centroids)
-        new_centroids = np.array([
-            numeric_data.values[clusters == i].mean(axis=0) if (clusters == i).any() else centroids[i]
-            for i in range(n_clusters)
-        ])
-
-        if np.allclose(centroids, new_centroids):
-            break
-        centroids = new_centroids
-
-    dataframe['cluster'] = clusters
-    return dataframe
 
 def create_histograms(dataframe, bins=10):
     """
-    Create histograms for all numeric columns in the dataset.
+    Create histograms for numeric columns with labels and annotations.
 
     Parameters:
-        dataframe (pd.DataFrame): The input dataset for visualization.
-        bins (int): Number of bins for the histogram. Defaults to 10.
+    dataframe (pd.DataFrame): The dataset to analyze.
+    bins (int): Number of bins for histograms.
 
     Returns:
-        list: A list of matplotlib Figure objects for the histograms.
+    list: Matplotlib figures for histograms.
     """
     histograms = []
     numeric_columns = dataframe.select_dtypes(include=[np.number])
@@ -158,74 +156,64 @@ def create_histograms(dataframe, bins=10):
         plt.title(f"Histogram of {col}")
         plt.xlabel(col)
         plt.ylabel("Frequency")
-        plt.grid(True)
-        plt.tight_layout()
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+        # Annotate significant points
+        plt.annotate(f"Mean: {dataframe[col].mean():.2f}", xy=(0.7, 0.9), xycoords='axes fraction')
+        plt.annotate(f"Max: {dataframe[col].max():.2f}", xy=(0.7, 0.85), xycoords='axes fraction')
         histograms.append(plt.gcf())
         plt.close()
 
     return histograms
 
-def create_boxplots(dataframe):
-    """
-    Create boxplots for all numeric columns in the dataset.
-
-    Parameters:
-        dataframe (pd.DataFrame): The input dataset for visualization.
-
-    Returns:
-        list: A list of matplotlib Figure objects for the boxplots.
-    """
-    boxplots = []
-    numeric_columns = dataframe.select_dtypes(include=[np.number])
-
-    for col in numeric_columns.columns:
-        plt.figure()
-        sns.boxplot(x=dataframe[col], color='orange')
-        plt.title(f"Boxplot of {col}")
-        plt.xlabel(col)
-        plt.grid(True)
-        plt.tight_layout()
-        boxplots.append(plt.gcf())
-        plt.close()
-
-    return boxplots
 
 def create_correlation_heatmap(dataframe):
     """
-    Create a heatmap for visualizing the correlation matrix of numeric columns in the dataset.
+    Create a labeled correlation heatmap for numeric columns.
 
     Parameters:
-        dataframe (pd.DataFrame): The input dataset for visualization.
+    dataframe (pd.DataFrame): The dataset to analyze.
 
     Returns:
-        matplotlib.figure.Figure: A matplotlib Figure object for the heatmap.
+    Matplotlib figure: Correlation heatmap.
     """
     numeric_data = dataframe.select_dtypes(include=[np.number])
     corr_matrix = numeric_data.corr()
     plt.figure(figsize=(10, 8))
     sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5)
     plt.title("Correlation Heatmap")
+    plt.xticks(rotation=45)
+    plt.yticks(rotation=45)
+
+    # Add key insights as annotations
+    for i in range(len(corr_matrix.columns)):
+        for j in range(len(corr_matrix.columns)):
+            if i != j and abs(corr_matrix.iloc[i, j]) > 0.7:
+                plt.text(j, i, "High Corr", ha='center', va='center', color='red', fontsize=9)
+
     plt.tight_layout()
     return plt.gcf()
 
+
 def generate_story(data_summary, analysis_results, charts, advanced_analysis_results):
     """
-    Generate a textual summary of the dataset analysis using AI API.
+    Generate a detailed narrative using LLM API based on dataset analysis, with iterative refinements.
 
     Parameters:
-        data_summary (dict): Summary of dataset including columns, data types, etc.
-        analysis_results (dict): Analytical results such as correlation matrix and outliers.
-        charts (list): List of charts generated during the analysis.
-        advanced_analysis_results (dict): Advanced analysis like clustering and time series insights.
+    data_summary (dict): Summary statistics of the dataset.
+    analysis_results (dict): Results of various analyses.
+    charts (list): Visualization charts.
+    advanced_analysis_results (dict): Advanced analyses results.
 
     Returns:
-        str: The AI-generated story or a failure message.
+    str: Generated narrative.
     """
     prompt = f"""
-    Write a comprehensive analysis report based on the following information:
-    Dataset Summary: {data_summary}
-    Analysis Results: {analysis_results}
-    Advanced Analysis Results: {advanced_analysis_results}
+    Write a comprehensive report:
+    1. Dataset summary: {data_summary}
+    2. Analysis insights: {analysis_results}
+    3. Advanced results: {advanced_analysis_results}
+    4. Charts: Describe key observations from visualizations.
     """
 
     headers = {
@@ -234,7 +222,7 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
     }
 
     data = {
-        "model": "gpt-4o-mini",
+        "model": "gpt-4",
         "messages": [
             {"role": "system", "content": "You are a data analysis assistant."},
             {"role": "user", "content": prompt}
@@ -244,75 +232,62 @@ def generate_story(data_summary, analysis_results, charts, advanced_analysis_res
 
     response = requests.post(openai_api_url, headers=headers, json=data)
     if response.status_code == 200:
-        return response.json().get('choices', [{}])[0].get('message', {}).get('content', "AI generation failed.")
+        narrative = response.json().get('choices', [{}])[0].get('message', {}).get('content', "AI generation failed.")
+
+        # Iterative refinement if key details are missing
+        if "details missing" in narrative.lower():
+            data["messages"].append({"role": "user", "content": "Refine and expand on missing details."})
+            response = requests.post(openai_api_url, headers=headers, json=data)
+            if response.status_code == 200:
+                narrative = response.json().get('choices', [{}])[0].get('message', {}).get('content', "AI generation failed.")
+
+        return narrative
     else:
         print(f"Error: {response.status_code}\n{response.text}")
         return "AI generation failed."
 
-def create_readme(ai_story, charts, summary):
-    """
-    Generate a README file summarizing the dataset analysis and include visualizations.
-
-    Parameters:
-        ai_story (str): The AI-generated story summarizing the analysis.
-        charts (list): List of matplotlib Figure objects to include in the README.
-        summary (dict): Summary of the dataset.
-    """
-    with open('README.md', 'w') as f:
-        f.write("# Dataset Analysis Report\n\n")
-        f.write("## Summary of Dataset\n\n")
-        f.write(f"Columns: {', '.join(summary['columns'])}\n")
-        f.write(f"Data Types: {json.dumps(summary['data_types'], indent=2)}\n")
-        f.write(f"Missing Values: {json.dumps(summary['missing_values'], indent=2)}\n")
-        f.write(f"Summary Statistics: {json.dumps(summary['summary_statistics'], indent=2)}\n")
-        f.write("\n## Analysis Results\n")
-        f.write(ai_story)
-        f.write("\n## Charts\n")
-
-        for chart in charts:
-            chart_file = f"chart_{charts.index(chart)}.png"
-            chart.savefig(chart_file)
-            f.write(f"![Chart {charts.index(chart)}]({chart_file})\n")
 
 def analyze_csv(input_file):
     """
-    Perform a comprehensive analysis of a CSV file including basic and advanced analysis.
+    Main function to analyze a CSV file and generate a detailed report.
 
     Parameters:
-        input_file (str): Path to the input CSV file.
+    input_file (str): Path to the CSV file.
     """
     dataframe = pd.read_csv(input_file, encoding='latin1')
 
+    # Perform analysis
     summary, correlation_matrix = perform_generic_analysis(dataframe)
+    dataframe, outlier_summary = detect_outliers_z_score(dataframe)
+
     advanced_analysis_results = {
-        'outlier_and_anomaly_detection': detect_outliers_z_score(dataframe)[1].to_dict(),
-        'time_series_forecast': perform_time_series_analysis(dataframe),
-        'cluster_analysis': dynamic_cluster_analysis(dataframe)['cluster'].value_counts().to_dict()
+        'time_series_forecast': perform_time_series_analysis(dataframe, 'target_column', 'date_column'),
+        'cluster_analysis': dynamic_cluster_analysis(dataframe),
+        'outlier_detection': outlier_summary
     }
 
-    ai_story = generate_story(
-        summary,
-        {'correlation_matrix': correlation_matrix},
-        [],
-        advanced_analysis_results
-    )
-
+    # Create visualizations
     charts = create_histograms(dataframe)
-    charts += create_boxplots(dataframe)
     charts.append(create_correlation_heatmap(dataframe))
 
-    create_readme(ai_story, charts, summary)
-    print("Analysis complete. Check README.md and chart files.")
+    # Generate narrative
+    ai_story = generate_story(summary, {'correlation_matrix': correlation_matrix}, charts, advanced_analysis_results)
+
+    print(ai_story)
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python autolysis.py <dataset.csv>")
+        print("Usage: python script.py <dataset.csv>")
         sys.exit(1)
 
     input_file = sys.argv[1]
     if not Path(input_file).is_file():
         print(f"File {input_file} not found.")
         sys.exit(1)
+
+    analyze_csv(input_file)
+
 
     analyze_csv(input_file)
 
