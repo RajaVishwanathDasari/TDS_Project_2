@@ -111,6 +111,7 @@ def perform_time_series_analysis(dataframe, target_column, date_column):
 def dynamic_cluster_analysis(dataframe, max_clusters=5):
     """
     Perform dynamic clustering analysis using K-means, with the number of clusters determined by data complexity.
+    Handles missing values (NaNs) by filling them with the column mean.
 
     Parameters:
     dataframe (pd.DataFrame): The dataset to analyze.
@@ -126,22 +127,28 @@ def dynamic_cluster_analysis(dataframe, max_clusters=5):
         print("No numeric columns for clustering.")
         return None
 
-    # Drop rows with NaN values
-    numeric_data_clean = numeric_data.dropna()
-
-    # If all rows were dropped, return None
-    if numeric_data_clean.empty:
-        print("No data left after dropping NaN values.")
-        return None
+    # Fill NaN values with the column means
+    numeric_data_filled = numeric_data.apply(lambda col: col.fillna(col.mean()), axis=0)
 
     # Normalize data (min-max scaling)
-    scaled_data = (numeric_data_clean - numeric_data_clean.min(axis=0)) / (numeric_data_clean.max(axis=0) - numeric_data_clean.min(axis=0))
+    scaled_data = (numeric_data_filled - numeric_data_filled.min(axis=0)) / (numeric_data_filled.max(axis=0) - numeric_data_filled.min(axis=0))
+
+    # Ensure the number of rows in the dataframe matches the number of rows in scaled_data
+    if len(scaled_data) != len(dataframe):
+        # Ensure we are not dropping rows by checking the lengths
+        print(f"Warning: Length mismatch between dataframe ({len(dataframe)}) and scaled data ({len(scaled_data)}).")
+        # Align rows by matching index
+        dataframe = dataframe.iloc[:len(scaled_data)]
 
     # Perform K-means clustering
     kmeans = KMeans(n_clusters=min(len(scaled_data), max_clusters), random_state=42)
-    dataframe['cluster'] = kmeans.fit_predict(scaled_data)
+    cluster_labels = kmeans.fit_predict(scaled_data)
+
+    # Ensure that cluster labels match the original dataframe's length
+    dataframe['cluster'] = np.concatenate([cluster_labels, np.full(len(dataframe) - len(cluster_labels), np.nan)])
 
     return dataframe[['cluster']]
+
 
 def create_histograms(dataframe, bins=10):
     """
