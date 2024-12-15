@@ -59,16 +59,41 @@ def perform_outlier_and_anomaly_detection(dataframe):
 
 def perform_regression_analysis(dataframe):
     """Perform basic linear regression using numpy (X and Y must be numeric)."""
-    X = dataframe.dropna().select_dtypes(include=[np.number]).drop(columns=['target_column'], errors='ignore')
-    y = dataframe['target_column'] if 'target_column' in dataframe.columns else None
+    try:
+        # Ensure that 'target_column' exists in the dataframe
+        if 'target_column' not in dataframe.columns:
+            return "Error: 'target_column' not found in the dataset."
+        
+        # Prepare X (features) and y (target)
+        X = dataframe.dropna().select_dtypes(include=[np.number]).drop(columns=['target_column'], errors='ignore')
+        y = dataframe['target_column']
+        
+        if X.empty or len(X) != len(y):
+            return "Error: The feature matrix X or the target vector y is empty or has mismatched lengths."
+
+        # Add intercept (bias term)
+        X = np.c_[np.ones(len(X)), X]  # Adding a column of ones for the intercept term
+        
+        # Perform linear regression using the normal equation: (X^T * X)^(-1) * X^T * y
+        beta = np.linalg.inv(X.T @ X) @ X.T @ y
+        
+        # Save coefficients (including intercept)
+        regression_results = dict(zip(['Intercept'] + X.columns.tolist(), beta))
+        
+        return regression_results
+
+    except KeyError as e:
+        return f"Error: Missing required column in dataframe: {str(e)}"
     
-    regression_results = None
-    if y is not None:
-        X = np.c_[np.ones(len(X)), X]  # Add intercept (bias term)
-        beta = np.linalg.inv(X.T @ X) @ X.T @ y  # Normal equation: (X^T * X)^(-1) * X^T * y
-        regression_results = dict(zip(['Intercept'] + X.columns.tolist(), beta))  # Save coefficients
+    except ValueError as e:
+        return f"Error: Value error during regression: {str(e)}"
     
-    return regression_results
+    except np.linalg.LinAlgError as e:
+        return f"Error: Linear algebra error during regression, possibly due to a singular matrix: {str(e)}"
+    
+    except Exception as e:
+        return f"An unexpected error occurred during regression analysis: {str(e)}"
+
 
 def perform_time_series_analysis(dataframe):
     """Perform basic time series analysis and forecasting using mean."""
@@ -95,9 +120,6 @@ def perform_time_series_analysis(dataframe):
     return None
 
 
-
-import numpy as np
-import pandas as pd
 
 def perform_cluster_analysis(dataframe, n_clusters=3, max_iter=100):
     """Perform cluster analysis using KMeans without sklearn and add cluster labels to the dataframe."""
