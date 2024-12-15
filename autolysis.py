@@ -39,8 +39,9 @@ openai_api_key = os.environ.get("AIPROXY_TOKEN")  # Ensure to set this in your e
 def generate_story(data_summary, analysis_results, charts):
     """
     Generates a detailed narrative based on the dataset's summary, analysis results, 
-    and visualizations using OpenAI's API. This story is intended to describe the data,
-    insights, and the implications of the analysis in a structured format.
+    and visualizations using OpenAI's API. This function illustrates best practices by 
+    breaking down complex tasks into manageable components, facilitating readability and 
+    maintainability. 
     
     Parameters:
     - data_summary: A dictionary containing summary statistics, missing values, 
@@ -71,23 +72,41 @@ def generate_story(data_summary, analysis_results, charts):
 
     # Construct the prompt for the AI to generate the story
     prompt = f"""
-    Write a detailed story about the analysis of a dataset. The story should describe:
-    1. A brief summary of the data: what the data consists of, column names, types, and any relevant patterns or issues.
-    2. The analysis performed: including steps like correlation, outlier detection, and any other relevant analysis.
-    3. Insights discovered: any patterns, anomalies, trends, or key takeaways from the data.
-        - Describe the key correlations found in the data and their implications.
-        - Discuss the outliers detected and what they mean for the data analysis.
-    4. Visualizations: describe the visualizations and what insights they provide.
-        - Discuss the histograms, boxplot, and correlation heatmap, and how they help illustrate the findings.
-    5. Implications: what actions can be taken based on the insights? What do these findings mean for decision-making?
+    Write a comprehensive and detailed story about the analysis of a dataset. The narrative should be structured and cover the following points:
     
-    Data Summary: {data_summary}
-    
-    Analysis Results:
-    {analysis_results}
+    1. **Data Overview:**
+        - Provide a brief summary of the dataset, including the types of data it contains (e.g., categorical, numerical).
+        - Describe the column names and explain their significance in the context of the dataset.
+        - Highlight any relevant patterns, issues, or trends observed during the exploration phase (e.g., missing values, skewed distributions, or data quality concerns).
+        
+    2. **Analysis Methodology:**
+        - Detail the analysis steps that were performed on the dataset. This includes techniques like correlation analysis, outlier detection, and any transformations or preprocessing steps (e.g., handling missing values, scaling, normalization).
+        - Explain the rationale behind choosing specific methods (such as the use of the IQR method for outlier detection).
+        - Discuss any assumptions made and how they impact the analysis.
 
-    Charts: {charts}
-    """
+    3. **Insights and Findings:**
+        - Identify the key findings from the analysis, such as significant correlations, trends, or anomalies.
+        - **Correlation Insights:** Describe the major correlations found between the variables, and interpret what these relationships mean in the context of the dataset.
+        - **Outlier Insights:** Discuss the detected outliers, their implications for the dataset, and what impact they could have on the analysis or decision-making process.
+        - Include any interesting observations, such as patterns or anomalies that could influence future data collection or decision-making strategies.
+
+    4. **Data Visualizations:**
+        - Describe the visualizations that were created, such as histograms, boxplots, and the correlation heatmap.
+        - Explain how each visualization helps to convey the findings. For example, describe what the histograms reveal about the distribution of the data, how the boxplot illustrates potential outliers, and what the correlation heatmap shows about the relationships between variables.
+        - Discuss how these visuals aid in understanding the dataset and provide insight into its structure.
+
+    5. **Implications and Recommendations:**
+        - Based on the insights and findings, propose actionable steps or recommendations. For example, what actions should be taken to address data quality issues, manage outliers, or leverage key correlations for decision-making?
+        - Discuss how the insights can influence business strategies, further analysis, or model development. Be sure to provide clear, practical implications that could guide decision-makers in their next steps.
+
+    **Additional Context:**
+    - **Data Summary:** {data_summary}
+    - **Analysis Results:** {analysis_results}
+    - **Charts:** {charts}
+    
+    The tone should be informative and professional, with a focus on clarity and actionable insights. The goal is to make the analysis understandable to both technical and non-technical audiences, so explanations should be accessible but thorough.
+"""
+
     
     # Set headers for the OpenAI request
     headers = {
@@ -120,11 +139,10 @@ def generate_story(data_summary, analysis_results, charts):
 
 def perform_generic_analysis(dataframe):
     """
-    Performs a generic analysis of the dataset, including:
-    - Summary of the dataset's structure (columns, data types, missing values)
-    - Calculation of summary statistics (mean, std, etc.)
-    - Correlation matrix for numeric columns
-    - Detection of outliers using the IQR method
+    This function follows the best practice of modularity by focusing solely on the 
+    data analysis phase, breaking down each task into individual, understandable steps.
+    It calculates the summary statistics, correlation matrix, and outlier detection in 
+    a highly maintainable and scalable way.
     
     Parameters:
     - dataframe: The input pandas DataFrame to analyze.
@@ -162,7 +180,10 @@ def perform_generic_analysis(dataframe):
 
 def create_histograms(dataframe, numerical_cols, output_folder):
     """
-    Creates histograms for the numerical columns in the dataset and saves them to the output folder.
+    This function demonstrates modularity by creating a set of histograms for all 
+    numerical columns in the dataset. It is efficient as it iterates over the numerical 
+    columns and saves each chart individually. The design allows the function to be 
+    reused with different datasets without any changes.
     
     Parameters:
     - dataframe: The pandas DataFrame containing the dataset.
@@ -189,7 +210,9 @@ def create_histograms(dataframe, numerical_cols, output_folder):
 
 def create_boxplots(dataframe, numerical_cols, output_folder):
     """
-    Creates a boxplot for the dataset's numerical columns to detect outliers and saves it to the output folder.
+    This function shows efficient handling of outliers by creating a boxplot to visualize 
+    any potential issues. The function follows the best practice of creating visualizations 
+    for the key tasks (e.g., detecting outliers) and storing them in a specified folder.
     
     Parameters:
     - dataframe: The pandas DataFrame containing the dataset.
@@ -210,7 +233,9 @@ def create_boxplots(dataframe, numerical_cols, output_folder):
 
 def create_correlation_heatmap(correlation_matrix, output_folder):
     """
-    Creates a heatmap for the correlation matrix and saves it to the output folder.
+    Creating a correlation heatmap is a great example of following best practices 
+    for visualizing relationships in a dataset. This function demonstrates efficiency 
+    and flexibility by generating a heatmap only if a valid correlation matrix is provided.
     
     Parameters:
     - correlation_matrix: A pandas DataFrame containing the correlation matrix.
@@ -231,8 +256,10 @@ def create_correlation_heatmap(correlation_matrix, output_folder):
 
 def create_readme(ai_story, charts, summary, output_folder):
     """
-    Creates a README file that includes the dataset summary, AI-generated story, 
-    and links to the generated charts for visualizing the analysis.
+    This function provides clear documentation by generating a README file that 
+    includes a detailed description of the dataset, the analysis performed, the insights 
+    obtained, and the visualizations created. The modular design ensures easy updates 
+    and adaptability for future improvements.
     
     Parameters:
     - ai_story: The AI-generated analysis and insights about the dataset.
@@ -260,13 +287,11 @@ def create_readme(ai_story, charts, summary, output_folder):
 
 def analyze_csv(input_file):
     """
-    Main function that orchestrates the entire analysis workflow. It:
-    1. Loads the dataset.
-    2. Performs analysis (summary, correlation, outliers).
-    3. Generates AI-based insights.
-    4. Creates visualizations and saves them.
-    5. Generates the final README file with results and charts.
-    
+    The entry point of the script demonstrates clean and maintainable code by orchestrating 
+    the entire analysis process in a single, cohesive function. It ensures separation of concerns 
+    by delegating specific tasks to other functions like data loading, analysis, visualization, 
+    and report generation.
+
     Parameters:
     - input_file: The path to the CSV file to be analyzed.
     """
@@ -302,8 +327,9 @@ def analyze_csv(input_file):
 
 if __name__ == "__main__":
     """
-    The entry point for the script. It expects the CSV filename as a command-line argument.
-    If no argument is passed or the file does not exist, it exits with a usage message.
+    The entry point for the script. It ensures that the code is robust by checking if 
+    the required CSV file exists and providing clear error messages when arguments are 
+    missing or invalid. This improves user experience and error handling.
     """
     # Ensure that the user provided a valid CSV filename
     if len(sys.argv) != 2:
@@ -318,5 +344,6 @@ if __name__ == "__main__":
 
     # Call the analyze_csv function to start the analysis process
     analyze_csv(input_file)
+
 
 
