@@ -8,7 +8,8 @@
 #   "pathlib",
 #   "openai",
 #   "seaborn",
-#   "matplotlib"
+#   "matplotlib",
+#   "scikit-learn"
 # ]
 # ///
 import os
