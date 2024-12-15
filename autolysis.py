@@ -1,4 +1,5 @@
-# Add to dependencies list
+# /// script
+# requires-python = ">=3.11"
 # dependencies = [
 #   "httpx",
 #   "pandas",
@@ -7,6 +8,7 @@
 #   "pathlib",
 #   "matplotlib"
 # ]
+# ///
 
 
 import os
