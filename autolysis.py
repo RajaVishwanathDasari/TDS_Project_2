@@ -143,25 +143,42 @@ def perform_cluster_analysis(dataframe, n_clusters=3, max_iter=100):
 
 def perform_geographic_analysis(dataframe, lat_col='latitude', lon_col='longitude'):
     """Perform basic geographic analysis using K-means (without sklearn)."""
-    coords = dataframe[[lat_col, lon_col]].dropna()
-    K = 3  # Number of clusters for geographic analysis
-
-    # Randomly initialize centroids
-    centroids = coords.sample(K).values
-    prev_centroids = centroids.copy()
-    
-    # Iterative process to assign clusters
-    for _ in range(100):  # Max iterations
-        distances = np.linalg.norm(coords.values[:, np.newaxis] - centroids, axis=2)
-        clusters = np.argmin(distances, axis=1)
-        new_centroids = np.array([coords[clusters == i].mean(axis=0) for i in range(K)])
+    try:
+        # Check if the necessary columns exist
+        if lat_col not in dataframe.columns or lon_col not in dataframe.columns:
+            return f"Error: Required columns '{lat_col}' and '{lon_col}' not found in dataset"
         
-        if np.all(new_centroids == prev_centroids):  # If centroids don't change, break early
-            break
-        prev_centroids = new_centroids
-    
-    dataframe['geo_cluster'] = clusters
-    return dataframe
+        # Drop rows with missing values in the latitude or longitude columns
+        coords = dataframe[[lat_col, lon_col]].dropna()
+        
+        if coords.empty:
+            return "Error: No valid latitude/longitude data available after removing missing values"
+        
+        K = 3  # Number of clusters for geographic analysis
+        
+        # Randomly initialize centroids
+        centroids = coords.sample(K).values
+        prev_centroids = centroids.copy()
+        
+        # Iterative process to assign clusters
+        for _ in range(100):  # Max iterations
+            distances = np.linalg.norm(coords.values[:, np.newaxis] - centroids, axis=2)
+            clusters = np.argmin(distances, axis=1)
+            new_centroids = np.array([coords[clusters == i].mean(axis=0) for i in range(K)])
+            
+            # If centroids don't change, break early
+            if np.all(new_centroids == prev_centroids):
+                break
+            prev_centroids = new_centroids
+        
+        # Add a new column for clusters in the dataframe
+        dataframe['geo_cluster'] = clusters
+        return dataframe
+
+    except Exception as e:
+        # Handle any unexpected errors and return a message
+        return f"An error occurred during geographic analysis: {str(e)}"
+
 
 def generate_story(data_summary, analysis_results, charts, advanced_analysis_results):
     """Generate a detailed story using the AI API based on the dataset analysis."""
