@@ -80,18 +80,20 @@ def perform_time_series_analysis(dataframe):
             break
 
     if date_column is None:
-        raise ValueError("No date column found in the dataset")
+        print("No date column found in the dataset. Skipping time series analysis.")
+        return None  # Return None if no date column is found
 
     # Convert the detected column to datetime format
     dataframe[date_column] = pd.to_datetime(dataframe[date_column])
 
-    # Proceed with the time series analysis
+    # Proceed with the time series analysis if a valid date column is found
     dataframe.set_index(date_column, inplace=True)
     ts_data = dataframe['target_column'] if 'target_column' in dataframe.columns else None
     if ts_data is not None:
         forecast = ts_data.mean()  # Basic forecast: the mean of the data
         return forecast
     return None
+
 
 
 def perform_cluster_analysis(dataframe):
